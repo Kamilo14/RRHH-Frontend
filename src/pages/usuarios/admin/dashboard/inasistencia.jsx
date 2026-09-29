@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { listarSolicitudesAusencia, aprobarSolicitud, rechazarSolicitud } from '../../../../services/ausenciasService'
-import AusenciaFormModal from '../../../../components/AusenciaFormModal'
+import { listarSolicitudesAusencia, aprobarSolicitud, rechazarSolicitud, solicitarAusencia } from '../../../../services/ausenciasService'
+import { listarTrabajadores } from '../../../../services/trabajadoresService'
 import '../../../../styles/inasistencia.css'
+import '../../../../styles/modal.css'
 
 const estadoColor = {
   PENDIENTE: 'orange',
@@ -27,10 +28,33 @@ function Inasistencia() {
   const [error, setError]             = useState(null)
   const [filtro, setFiltro]           = useState('todos')
   const [search, setSearch]           = useState('')
-  const [showModal, setShowModal]     = useState(false)
+  const [showForm, setShowForm]       = useState(false)
   const [expandido, setExpandido]     = useState(null)
+  const [trabajadores, setTrabajadores] = useState([])
+  const [formError, setFormError]     = useState('')
+  const [formLoading, setFormLoading] = useState(false)
 
-  useEffect(() => { fetchSolicitudes() }, [])
+  const [formData, setFormData] = useState({
+    trabajadorId: '',
+    tipo: '',
+    fechaInicio: '',
+    fechaFin: '',
+    motivo: '',
+  })
+
+  useEffect(() => {
+    fetchSolicitudes()
+    cargarTrabajadores()
+  }, [])
+
+  async function cargarTrabajadores() {
+    try {
+      const data = await listarTrabajadores()
+      setTrabajadores(data)
+    } catch (err) {
+      console.error('Error al cargar trabajadores:', err)
+    }
+  }
 
   async function fetchSolicitudes() {
     try {
@@ -43,6 +67,62 @@ function Inasistencia() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleAprobar(id) {
+    if (!confirm('¿Deseas aprobar esta solicitud?')) return
+    try {
+      await aprobarSolicitud(id)
+      fetchSolicitudes()
+    } catch (err) {
+      alert(err.message ?? 'Error al aprobar solicitud')
+    }
+  }
+
+  async function handleRechazar(id) {
+    const motivo = prompt('Motivo del rechazo:')
+    if (!motivo) return
+    try {
+      await rechazarSolicitud(id, { motivo })
+      fetchSolicitudes()
+    } catch (err) {
+      alert(err.message ?? 'Error al rechazar solicitud')
+    }
+  }
+
+  async function handleCrearSolicitud(e) {
+    e.preventDefault()
+    setFormError('')
+    setFormLoading(true)
+
+    try {
+      await solicitarAusencia(formData)
+      setShowForm(false)
+      setFormData({
+        trabajadorId: '',
+        tipo: '',
+        fechaInicio: '',
+        fechaFin: '',
+        motivo: '',
+      })
+      fetchSolicitudes()
+    } catch (err) {
+      setFormError(err.message || 'Error al crear solicitud')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  function handleCancelForm() {
+    setShowForm(false)
+    setFormData({
+      trabajadorId: '',
+      tipo: '',
+      fechaInicio: '',
+      fechaFin: '',
+      motivo: '',
+    })
+    setFormError('')
   }
 
   const filtradas = solicitudes.filter((s) => {
@@ -108,10 +188,104 @@ function Inasistencia() {
             </button>
           ))}
         </div>
-        <button id="btn-nueva-solicitud" type="button" className="inas-btn-primary">
+        <button id="btn-nueva-solicitud" type="button" className="inas-btn-primary" onClick={() => setShowForm(true)}>
           <span aria-hidden="true">＋</span> Nueva solicitud
         </button>
       </div>
+
+      {/* Formulario de nueva solicitud */}
+      {showForm && (
+        <div className="form-card">
+          <div className="form-card-header">
+            <h3>Nueva Solicitud de Ausencia</h3>
+            <button type="button" onClick={handleCancelForm} className="btn-close">×</button>
+          </div>
+          <form onSubmit={handleCrearSolicitud} className="form-card-body">
+            {formError && <div className="form-error">{formError}</div>}
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="trabajador">Trabajador *</label>
+                <select
+                  id="trabajador"
+                  required
+                  value={formData.trabajadorId}
+                  onChange={(e) => setFormData({ ...formData, trabajadorId: e.target.value })}
+                >
+                  <option value="">Seleccionar trabajador...</option>
+                  {trabajadores.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre} {t.apellido} ({t.rutTrabajador})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="tipo">Tipo de ausencia *</label>
+                <select
+                  id="tipo"
+                  required
+                  value={formData.tipo}
+                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                >
+                  <option value="">Seleccionar tipo...</option>
+                  <option value="VACACION">Vacaciones</option>
+                  <option value="LICENCIA_MEDICA">Licencia médica</option>
+                  <option value="PERMISO">Permiso</option>
+                  <option value="AUSENCIA_JUSTIFICADA">Ausencia justificada</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="fechaInicio">Fecha de inicio *</label>
+                <input
+                  id="fechaInicio"
+                  type="date"
+                  required
+                  value={formData.fechaInicio}
+                  onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="fechaFin">Fecha de término *</label>
+                <input
+                  id="fechaFin"
+                  type="date"
+                  required
+                  value={formData.fechaFin}
+                  onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="motivo">Motivo (opcional)</label>
+                <textarea
+                  id="motivo"
+                  rows="3"
+                  value={formData.motivo}
+                  onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+                  placeholder="Describe el motivo de la ausencia..."
+                />
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" onClick={handleCancelForm} className="btn-secondary">
+                Cancelar
+              </button>
+              <button type="submit" disabled={formLoading} className="btn-primary">
+                {formLoading ? 'Enviando...' : 'Enviar solicitud'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Estados */}
       {loading && (

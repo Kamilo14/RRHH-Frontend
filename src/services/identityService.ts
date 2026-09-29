@@ -60,7 +60,9 @@ export interface CrearUsuarioRequest {
 
 export interface InvitarUsuarioRequest {
   email: string
-  rol: string
+  trabajadorId: string
+  nombre: string
+  crearEnCognito: boolean
 }
 
 export interface AsignarUsuarioRequest {
@@ -116,7 +118,12 @@ export async function crearUsuario(data: CrearUsuarioRequest): Promise<UsuarioRe
 
 /** Invita un trabajador al tenant */
 export async function invitarUsuario(data: InvitarUsuarioRequest): Promise<UsuarioResponse> {
-  const res = await apiPost<ApiResponse<UsuarioResponse>>(`${BASE}/usuarios/invitar`, data)
+  const res = await apiPost<ApiResponse<UsuarioResponse>>(`${BASE}/usuarios/invitar`, {
+    email: data.email,
+    trabajador_id: data.trabajadorId,
+    nombre: data.nombre,
+    crear_en_cognito: data.crearEnCognito,
+  })
   return res.datos
 }
 

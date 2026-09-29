@@ -167,6 +167,12 @@
   color: #f2b2a5;
 }
 
+.admin-sidebar__footer-link--active {
+  color: #0d4d78;
+  background: #ffffff;
+  border-radius: 9px;
+}
+
 @media (max-width: 800px) {
   .admin-sidebar {
     width: 100%;
@@ -175,13 +181,17 @@
   }
 
   .admin-sidebar__tenant,
-  .admin-sidebar__footer,
   .admin-sidebar__section-title {
     display: none;
   }
 
   .admin-sidebar__brand {
     padding: 0 8px 16px;
+  }
+
+  .admin-sidebar__footer {
+    margin-top: 16px;
+    padding-top: 12px;
   }
 
   .admin-sidebar__nav {

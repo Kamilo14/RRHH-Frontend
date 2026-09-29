@@ -13,6 +13,7 @@
  */
 
 import { apiRequest, apiPost, apiPatch, apiDelete, type ApiResponse } from './httpClient'
+import { invitarUsuario } from './identityService'
 
 const BASE = import.meta.env.VITE_API_TRABAJADORES as string
 
@@ -74,8 +75,38 @@ export async function obtenerTrabajador(id: string): Promise<TrabajadorResponse>
 
 /** Crea un nuevo trabajador */
 export async function crearTrabajador(data: CrearTrabajadorRequest): Promise<TrabajadorResponse> {
-  const res = await apiPost<ApiResponse<TrabajadorResponse>>(`${BASE}/trabajadores`, data)
+  const res = await apiPost<ApiResponse<TrabajadorResponse>>(`${BASE}/trabajadores`, {
+    nombre: data.nombre, apellido: data.apellido, email: data.email,
+    rut_trabajador: data.rutTrabajador,
+    telefono: data.telefono || null,
+    departamento_id: data.departamentoId || null,
+    cargo_id: data.cargoId || null,
+    jefatura_id: data.jefaturaId || null,
+  })
   return res.datos
+}
+
+export class CuentaPendienteError extends Error {
+  trabajador: TrabajadorResponse
+  constructor(trabajador: TrabajadorResponse, cause: unknown) {
+    super(`La ficha ya está creada, pero la cuenta no se pudo completar. ${cause instanceof Error ? cause.message : ''} Pulsa Guardar para reintentar solo la cuenta.`)
+    this.trabajador = trabajador
+  }
+}
+
+export async function crearTrabajadorConCuenta(data: CrearTrabajadorRequest, pendiente: TrabajadorResponse | null = null) {
+  const trabajador = pendiente ?? await crearTrabajador(data)
+  try {
+    await invitarUsuario({
+      email: trabajador.email,
+      nombre: `${trabajador.nombre} ${trabajador.apellido}`,
+      trabajadorId: trabajador.id,
+      crearEnCognito: true,
+    })
+    return trabajador
+  } catch (error) {
+    throw new CuentaPendienteError(trabajador, error)
+  }
 }
 
 /** Actualiza datos de un trabajador (PATCH parcial) */

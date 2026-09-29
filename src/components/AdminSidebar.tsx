@@ -7,6 +7,9 @@ export type AdminSection =
   | 'asistencia'
   | 'ausencias'
   | 'notificaciones'
+  | 'configuracion-cuenta'
+  | 'configuracion-roles'
+  | 'configuracion-permisos'
 
 type AdminSidebarProps = {
   activeSection: AdminSection
@@ -62,10 +65,16 @@ function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
             {item.id === 'notificaciones' && <span className="admin-sidebar__badge">3</span>}
           </button>
         ))}
+
       </nav>
 
       <div className="admin-sidebar__footer">
-        <button className="admin-sidebar__footer-link" type="button">
+        <button
+          className={`admin-sidebar__footer-link${activeSection.startsWith('configuracion-') ? ' admin-sidebar__footer-link--active' : ''}`}
+          type="button"
+          onClick={() => onSectionChange('configuracion-cuenta')}
+          aria-current={activeSection.startsWith('configuracion-') ? 'page' : undefined}
+        >
           <span aria-hidden="true">⚙</span>
           Configuración
         </button>

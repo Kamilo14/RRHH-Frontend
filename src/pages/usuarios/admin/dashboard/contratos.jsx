@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { listarContratos, finalizarContrato } from '../../../../services/contratosService'
-import tratos.css'
+import { listarContratos, finalizarContrato, crearContrato } from '../../../../services/contratosService'
+import { listarTrabajadores } from '../../../../services/trabajadoresService'
+import '../../../../styles/contratos.css'
+import '../../../../styles/modal.css'
 const TIPO_LABELS = {
   INDEFINIDO: 'Indefinido',
   PLAZO_FIJO: 'Plazo fijo',
@@ -25,11 +27,32 @@ function Contratos() {
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [filtro, setFiltro]       = useState('todos')
-  const [showModal, setShowModal] = useState(false)
-  const [Se 
+  const [showForm, setShowForm]   = useState(false)
+  const [search, setSearch]       = useState('')
+  const [trabajadores, setTrabajadores] = useState([])
+  const [formError, setFormError] = useState('')
+  const [formLoading, setFormLoading] = useState(false)
+
+  const [formData, setFormData] = useState({
+    trabajadorId: '',
+    salarioBase: '',
+    tipoContrato: '',
+    fechaInicio: '',
+    fechaTermino: '',
+  }) 
   useEffect(() => {
     fetchContratos()
+    cargarTrabajadores()
   }, [])
+
+  async function cargarTrabajadores() {
+    try {
+      const data = await listarTrabajadores()
+      setTrabajadores(data)
+    } catch (err) {
+      console.error('Error al cargar trabajadores:', err)
+    }
+  }
 
   async function fetchContratos() {
     try {
@@ -52,6 +75,46 @@ function Contratos() {
     } catch (err) {
       alert(err.message ?? 'Error al finalizar contrato')
     }
+  }
+
+  async function handleCrearContrato(e) {
+    e.preventDefault()
+    setFormError('')
+    setFormLoading(true)
+
+    try {
+      const contratoData = {
+        ...formData,
+        salarioBase: Number(formData.salarioBase),
+        fechaTermino: formData.fechaTermino || undefined,
+      }
+      await crearContrato(contratoData)
+      setShowForm(false)
+      setFormData({
+        trabajadorId: '',
+        salarioBase: '',
+        tipoContrato: '',
+        fechaInicio: '',
+        fechaTermino: '',
+      })
+      fetchContratos()
+    } catch (err) {
+      setFormError(err.message || 'Error al crear contrato')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  function handleCancelForm() {
+    setShowForm(false)
+    setFormData({
+      trabajadorId: '',
+      salarioBase: '',
+      tipoContrato: '',
+      fechaInicio: '',
+      fechaTermino: '',
+    })
+    setFormError('')
   }
 
   const contratosConEstado = contratos.map((c) => ({ ...c, _estado: calcularEstado(c) }))
@@ -116,11 +179,108 @@ function Contratos() {
               {est.charAt(0).toUpperCase() + est.slice(1)}
             </button>
           ))}
-        </div> onClick={() => setShowModal(true)}
-        <button id="btn-nuevo-contrato" type="button" className="cont-btn-primary">
+        </div>
+        <button id="btn-nuevo-contrato" type="button" className="cont-btn-primary" onClick={() => setShowForm(true)}>
           <span aria-hidden="true">＋</span> Nuevo contrato
         </button>
       </div>
+
+      {/* Formulario de nuevo contrato */}
+      {showForm && (
+        <div className="form-card">
+          <div className="form-card-header">
+            <h3>Nuevo Contrato</h3>
+            <button type="button" onClick={handleCancelForm} className="btn-close">×</button>
+          </div>
+          <form onSubmit={handleCrearContrato} className="form-card-body">
+            {formError && <div className="form-error">{formError}</div>}
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="trabajador">Trabajador *</label>
+                <select
+                  id="trabajador"
+                  required
+                  value={formData.trabajadorId}
+                  onChange={(e) => setFormData({ ...formData, trabajadorId: e.target.value })}
+                >
+                  <option value="">Seleccionar trabajador...</option>
+                  {trabajadores.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre} {t.apellido} ({t.rutTrabajador})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="tipoContrato">Tipo de contrato *</label>
+                <select
+                  id="tipoContrato"
+                  required
+                  value={formData.tipoContrato}
+                  onChange={(e) => setFormData({ ...formData, tipoContrato: e.target.value })}
+                >
+                  <option value="">Seleccionar tipo...</option>
+                  <option value="INDEFINIDO">Indefinido</option>
+                  <option value="PLAZO_FIJO">Plazo fijo</option>
+                  <option value="HONORARIOS">Honorarios</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="salarioBase">Sueldo base *</label>
+                <input
+                  id="salarioBase"
+                  type="number"
+                  required
+                  min="0"
+                  step="1"
+                  value={formData.salarioBase}
+                  onChange={(e) => setFormData({ ...formData, salarioBase: e.target.value })}
+                  placeholder="Ej: 500000"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="fechaInicio">Fecha de inicio *</label>
+                <input
+                  id="fechaInicio"
+                  type="date"
+                  required
+                  value={formData.fechaInicio}
+                  onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="fechaTermino">Fecha de término (opcional)</label>
+                <input
+                  id="fechaTermino"
+                  type="date"
+                  value={formData.fechaTermino}
+                  onChange={(e) => setFormData({ ...formData, fechaTermino: e.target.value })}
+                  placeholder="Solo para contratos a plazo fijo"
+                />
+                <small>Dejar vacío para contratos indefinidos</small>
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" onClick={handleCancelForm} className="btn-secondary">
+                Cancelar
+              </button>
+              <button type="submit" disabled={formLoading} className="btn-primary">
+                {formLoading ? 'Guardando...' : 'Guardar contrato'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Estados de carga */}
       {loading && (
@@ -179,12 +339,19 @@ function Contratos() {
                     </td>
                     <td>
                       <div className="cont-actions">
-                        <button type="button" className="cont-action-btn" title="Ver contrato">✎ Ver</button>
+                        <button 
+                          type="button" 
+                          className="cont-action-btn" 
+                          title="Ver detalles del contrato"
+                          onClick={() => alert('Funcionalidad de ver contrato en desarrollo')}
+                        >
+                          👁 Ver
+                        </button>
                         {c.activo && (
                           <button
                             type="button"
-                            className="cont-action-btn cont-action-btn--renew"
-                            title="Finalizar"
+                            className="cont-action-btn cont-action-btn--danger"
+                            title="Finalizar contrato"
                             onClick={() => handleFinalizar(c.id)}
                           >
                             ✕ Finalizar
@@ -198,22 +365,9 @@ function Contratos() {
             </tbody>
           </table>
         </div>
-      )}>
       )}
-
-      {showModal && (
-        <ContratoFormModal
-          onClose={() = setShowModal(false)}
-      </  onSuccess={(d => {
-            fetchContratos()
-            setShowModal(false)
-          }iv>
-  )    />
-      )}
-    
-
-e
-
-export default Contratosxport default Contratos}
+    </div>
+  )
+}
 
 export default Contratos

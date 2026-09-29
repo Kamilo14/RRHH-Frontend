@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { crearTrabajador, listarDepartamentos, listarCargos, type CrearTrabajadorRequest } from '../services/trabajadoresService'
+import { useState, useEffect } from 'react'
+import { crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos, type CrearTrabajadorRequest, type TrabajadorResponse, type Departamento, type Cargo } from '../services/trabajadoresService'
+import '../styles/modal.css'
 
 interface TrabajadorFormModalProps {
   onClose: () => void
@@ -9,8 +10,9 @@ interface TrabajadorFormModalProps {
 export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFormModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [departamentos, setDepartamentos] = useState([])
-  const [cargos, setCargos] = useState([])
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([])
+  const [cargos, setCargos] = useState<Cargo[]>([])
+  const [cuentaPendiente, setCuentaPendiente] = useState<TrabajadorResponse | null>(null)
 
   const [formData, setFormData] = useState<CrearTrabajadorRequest>({
     nombre: '',
@@ -23,9 +25,9 @@ export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFo
     jefaturaId: '',
   })
 
-  useState(() => {
+  useEffect(() => {
     cargarCatalogos()
-  })
+  }, [])
 
   async function cargarCatalogos() {
     try {
@@ -43,10 +45,11 @@ export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFo
     setLoading(true)
 
     try {
-      await crearTrabajador(formData)
+      await crearTrabajadorConCuenta(formData, cuentaPendiente)
       onSuccess()
       onClose()
     } catch (err: any) {
+      if (err instanceof CuentaPendienteError) setCuentaPendiente(err.trabajador)
       setError(err.message || 'Error al crear trabajador')
     } finally {
       setLoading(false)

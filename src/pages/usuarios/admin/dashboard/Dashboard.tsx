@@ -4,6 +4,9 @@ import Trabajadores from './trabajadores'
 import Contratos from './contratos'
 import Asistencia from './asistencia'
 import Inasistencia from './inasistencia'
+import Roles from '../configuracion/roles'
+import Permisos from '../configuracion/permisos'
+import MiCuenta from '../configuracion/miCuenta'
 import '../../../../styles/admin.css'
 import '../../../../styles/Dashboard.css'
 
@@ -28,6 +31,9 @@ const sectionTitles: Record<AdminSection, string> = {
   asistencia: 'Asistencia',
   ausencias: 'Ausencias / Inasistencias',
   notificaciones: 'Notificaciones',
+  'configuracion-cuenta': 'Configuración / Mi cuenta',
+  'configuracion-roles': 'Configuración / Roles',
+  'configuracion-permisos': 'Configuración / Permisos',
 }
 
 function Dashboard() {
@@ -54,6 +60,12 @@ function Dashboard() {
             <span>Próximamente disponible</span>
           </section>
         )
+      case 'configuracion-roles':
+        return <Roles />
+      case 'configuracion-cuenta':
+        return <MiCuenta />
+      case 'configuracion-permisos':
+        return <Permisos />
       default:
         return null
     }
@@ -78,6 +90,25 @@ function Dashboard() {
           </div>
         </header>
 
+        {activeSection.startsWith('configuracion-') && (
+          <nav className="config-navigation" aria-label="Configuración">
+            {([
+              ['configuracion-cuenta', 'Mi cuenta'],
+              ['configuracion-roles', 'Roles'],
+              ['configuracion-permisos', 'Permisos'],
+            ] as const).map(([section, label]) => (
+              <button
+                key={section}
+                type="button"
+                className={activeSection === section ? 'config-navigation__active' : ''}
+                aria-current={activeSection === section ? 'page' : undefined}
+                onClick={() => setActiveSection(section)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
         {renderSection()}
       </main>
     </div>
