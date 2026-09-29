@@ -1,0 +1,131 @@
+.admin-shell {
+  display: flex;
+  min-height: 100vh;
+  color: #12324c;
+  background: #f5f8fb;
+}
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: 34px 42px 42px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 31px;
+}
+
+.admin-header__eyebrow {
+  color: #7890a0;
+  font-size: 0.76rem;
+}
+
+.admin-header h1 {
+  margin: 8px 0 0;
+  color: #12324c;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+}
+
+.admin-header__user {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-header__avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #147eaf;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.admin-header__user strong,
+.admin-header__user span {
+  display: block;
+}
+
+.admin-header__user strong {
+  font-size: 0.82rem;
+}
+
+.admin-header__user div span {
+  margin-top: 3px;
+  color: #7890a0;
+  font-size: 0.7rem;
+}
+
+.admin-header__chevron {
+  margin-left: 8px;
+  color: #7890a0;
+  font-size: 1.3rem;
+}
+
+.admin-empty-state {
+  display: grid;
+  max-width: 660px;
+  margin: 70px auto;
+  padding: 52px 30px;
+  place-items: center;
+  border: 1px solid #e1ebf2;
+  border-radius: 18px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.admin-empty-state__icon {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  border-radius: 17px;
+  color: #147eaf;
+  background: #e7f5fb;
+  font-size: 1.8rem;
+}
+
+.admin-empty-state h2 {
+  margin: 18px 0 8px;
+  font-size: 1.25rem;
+}
+
+.admin-empty-state p {
+  max-width: 500px;
+  margin: 0;
+  color: #7890a0;
+  line-height: 1.6;
+}
+
+.admin-empty-state span {
+  margin-top: 22px;
+  color: #147eaf;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .admin-shell {
+    display: block;
+  }
+
+  .admin-main {
+    padding: 25px 18px;
+  }
+
+  .admin-header {
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+
+  .admin-header__user {
+    display: none;
+  }
+}
