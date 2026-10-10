@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { getMe, type MeResponse } from '../services/identityService'
-import { getToken, clearAuth, saveAuth } from '../services/httpClient'
+import { getToken, clearAuth } from '../services/httpClient'
 
 interface AuthContextType {
   user: MeResponse | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (token: string, slug: string) => Promise<void>
+  login: () => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -24,8 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = await getMe()
       setUser(userData)
     } catch (error) {
-      console.error('Error al obtener usuario:', error)
       setUser(null)
+      throw error
     } finally {
       setIsLoading(false)
     }
@@ -34,14 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getToken()
     if (token) {
-      refreshUser()
+      refreshUser().catch(() => undefined)
     } else {
       setIsLoading(false)
     }
   }, [refreshUser])
 
-  const login = async (token: string, slug: string) => {
-    saveAuth(token, slug)
+  const login = async () => {
     await refreshUser()
   }
 

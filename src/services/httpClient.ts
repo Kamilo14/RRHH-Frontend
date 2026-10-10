@@ -7,7 +7,11 @@
  * Cada service importa este helper en lugar de llamar fetch directamente.
  */
 
-import axios, { type AxiosInstance, type AxiosError } from 'axios'
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
+import { refreshIdToken } from './cognitoAuth'
+import { clearAuth, getSlug, getToken, tokenExpiresSoon } from './tokenStorage'
+
+export { clearAuth, getSlug, getToken } from './tokenStorage'
 
 // ─── Tipos comunes de respuesta del backend ───────────────────────────────────
 
@@ -18,28 +22,7 @@ export interface ApiResponse<T> {
   errores: { campo: string; detalle: string }[]
 }
 
-// ─── Storage keys ─────────────────────────────────────────────────────────────
-
-export const TOKEN_KEY = 'rrhh_token'
-export const SLUG_KEY = 'rrhh_empresa_slug'
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function getSlug(): string | null {
-  return localStorage.getItem(SLUG_KEY)
-}
-
-export function saveAuth(token: string, slug: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-  localStorage.setItem(SLUG_KEY, slug)
-}
-
-export function clearAuth(): void {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(SLUG_KEY)
-}
+type AuthRequestConfig = InternalAxiosRequestConfig & { skipAuth?: boolean; retried?: boolean }
 
 // ─── Cliente Axios ─────────────────────────────────────────────────────────────
 
@@ -50,26 +33,40 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Interceptor de request - agrega token y slug
-apiClient.interceptors.request.use((config) => {
-  const token = getToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+apiClient.interceptors.request.use(async (config: AuthRequestConfig) => {
+  if (!config.skipAuth && tokenExpiresSoon()) {
+    await refreshIdToken()
+  }
+
+  if (!config.skipAuth) {
+    const token = getToken()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
 
   const slug = getSlug()
-  if (slug) {
+  if (slug && !config.skipAuth) {
     config.headers['X-Empresa-Slug'] = slug
   }
 
   return config
 })
 
-// Interceptor de response - maneja errores
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
+  async (error: AxiosError) => {
+    const config = error.config as AuthRequestConfig | undefined
+    if (error.response?.status === 401 && config && !config.skipAuth && !config.retried) {
+      config.retried = true
+      const next = await refreshIdToken()
+      if (next) {
+        config.headers.Authorization = `Bearer ${next}`
+        return apiClient.request(config)
+      }
+      clearAuth()
+      window.location.href = '/login'
+    } else if (error.response?.status === 401 && config && !config.skipAuth) {
       clearAuth()
       window.location.href = '/login'
     }
@@ -104,9 +101,7 @@ export async function apiRequest<T>(
   const { public: isPublic = false } = options
 
   if (isPublic) {
-    const response = await apiClient.get(url, {
-      headers: { Authorization: undefined, 'X-Empresa-Slug': undefined },
-    })
+    const response = await apiClient.get(url, { skipAuth: true } as AuthRequestConfig)
     return response.data as T
   }
 
