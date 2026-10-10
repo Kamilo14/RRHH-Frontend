@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { listarMarcasAsistencia } from '../../../../services/asistenciaService'
+import { listarMarcasAsistencia, listarMarcasPorTrabajador } from '../../../../services/asistenciaService'
 import { listarTrabajadores } from '../../../../services/trabajadoresService'
+import { listarSolicitudesPorTrabajador } from '../../../../services/ausenciasService'
 import '../../../../styles/asistencia.css'
 
 function fechaLocalISO(fecha = new Date()) {
@@ -50,6 +51,34 @@ function procesarMarcas(marcas, fechaSeleccionada) {
   })
 }
 
+function procesarHistorial(marcas) {
+  const porDia = {}
+  for (const marca of marcas) {
+    const fecha = marca.fechaHora.slice(0, 10)
+    if (!porDia[fecha]) porDia[fecha] = { fecha, entrada: null, salida: null, entradaFecha: null, salidaFecha: null }
+    if (marca.tipo === 'ENTRADA' && (!porDia[fecha].entradaFecha || marca.fechaHora < porDia[fecha].entradaFecha)) {
+      porDia[fecha].entradaFecha = marca.fechaHora
+      porDia[fecha].entrada = new Date(marca.fechaHora).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+    }
+    if (marca.tipo === 'SALIDA' && (!porDia[fecha].salidaFecha || marca.fechaHora > porDia[fecha].salidaFecha)) {
+      porDia[fecha].salidaFecha = marca.fechaHora
+      porDia[fecha].salida = new Date(marca.fechaHora).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+    }
+  }
+
+  return Object.values(porDia)
+    .map((dia) => {
+      if (!dia.entradaFecha || !dia.salidaFecha) return { ...dia, horas: 'Jornada en curso' }
+      const minutos = Math.max(0, Math.round((new Date(dia.salidaFecha) - new Date(dia.entradaFecha)) / 60_000))
+      return { ...dia, horas: `${Math.floor(minutos / 60)}h ${minutos % 60}m` }
+    })
+    .sort((a, b) => b.fecha.localeCompare(a.fecha))
+}
+
+function etiquetaAusencia(tipo) {
+  return (tipo ?? '').replaceAll('_', ' ').toLowerCase().replace(/^./, (letra) => letra.toUpperCase())
+}
+
 const estadoInfo = {
   presente:    { label: 'Completó jornada', color: 'green' },
   activo:      { label: 'En jornada',       color: 'blue'  },
@@ -65,6 +94,9 @@ function Asistencia() {
   const [search, setSearch]   = useState('')
   const [trabajadores, setTrabajadores] = useState([])
   const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaLocalISO())
+  const [historial, setHistorial] = useState(null)
+  const [cargandoHistorial, setCargandoHistorial] = useState(false)
+  const [errorHistorial, setErrorHistorial] = useState(null)
 
   useEffect(() => {
     fetchMarcas()
@@ -89,6 +121,23 @@ function Asistencia() {
       setError(err.message ?? 'Error al cargar asistencia')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function abrirHistorial(registro) {
+    setHistorial({ trabajador: registro, marcas: [], ausencias: [] })
+    setCargandoHistorial(true)
+    setErrorHistorial(null)
+    try {
+      const [marcasTrabajador, ausenciasTrabajador] = await Promise.all([
+        listarMarcasPorTrabajador(registro.trabajadorId),
+        listarSolicitudesPorTrabajador(registro.trabajadorId),
+      ])
+      setHistorial({ trabajador: registro, marcas: procesarHistorial(marcasTrabajador), ausencias: ausenciasTrabajador })
+    } catch (err) {
+      setErrorHistorial(err.message ?? 'No fue posible cargar el historial del trabajador.')
+    } finally {
+      setCargandoHistorial(false)
     }
   }
 
@@ -265,7 +314,7 @@ function Asistencia() {
                     </span>
                   </td>
                   <td>
-                    <button type="button" className="asist-action-btn" aria-label={`Ver historial de ${r.trabajadorNombre}`}>
+                    <button type="button" className="asist-action-btn" aria-label={`Ver historial de ${r.trabajadorNombre}`} onClick={() => abrirHistorial(r)}>
                       Historial
                     </button>
                   </td>
@@ -273,6 +322,47 @@ function Asistencia() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {historial && (
+        <div className="asist-history-overlay" role="presentation" onMouseDown={() => setHistorial(null)}>
+          <section className="asist-history-modal" role="dialog" aria-modal="true" aria-labelledby="historial-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="asist-history-modal__header">
+              <div>
+                <span>Historial laboral</span>
+                <h2 id="historial-title">{historial.trabajador.trabajadorNombre}</h2>
+              </div>
+              <button type="button" className="asist-history-modal__close" aria-label="Cerrar historial" onClick={() => setHistorial(null)}>×</button>
+            </header>
+
+            {cargandoHistorial && <div className="asist-history-state">Cargando asistencia y ausencias…</div>}
+            {errorHistorial && <div className="asist-history-state asist-history-state--error">{errorHistorial}</div>}
+
+            {!cargandoHistorial && !errorHistorial && (
+              <div className="asist-history-content">
+                <section>
+                  <div className="asist-history-heading"><h3>Asistencia registrada</h3><span>{historial.marcas.length} días</span></div>
+                  {historial.marcas.length === 0 ? <p className="asist-history-empty">No hay marcas de asistencia para este trabajador.</p> : (
+                    <div className="asist-history-table-wrap">
+                      <table className="asist-history-table">
+                        <thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Jornada</th></tr></thead>
+                        <tbody>{historial.marcas.map((dia) => <tr key={dia.fecha}><td>{textoFecha(dia.fecha)}</td><td>{dia.entrada ?? '—'}</td><td>{dia.salida ?? '—'}</td><td>{dia.horas}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+                <section>
+                  <div className="asist-history-heading"><h3>Ausencias</h3><span>{historial.ausencias.length} solicitudes</span></div>
+                  {historial.ausencias.length === 0 ? <p className="asist-history-empty">No hay ausencias registradas para este trabajador.</p> : (
+                    <ul className="asist-history-absences">
+                      {historial.ausencias.map((ausencia) => <li key={ausencia.id}><div><strong>{etiquetaAusencia(ausencia.tipo)}</strong><span>{ausencia.fechaInicio} al {ausencia.fechaFin}{ausencia.motivo ? ` · ${ausencia.motivo}` : ''}</span></div><span className={`asist-badge asist-badge--${ausencia.estado === 'APROBADO' ? 'green' : ausencia.estado === 'RECHAZADO' ? 'red' : 'orange'}`}>{etiquetaAusencia(ausencia.estado)}</span></li>)}
+                    </ul>
+                  )}
+                </section>
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>
