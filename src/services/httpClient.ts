@@ -8,10 +8,9 @@
  */
 
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
-import { refreshIdToken } from './cognitoAuth'
-import { clearAuth, getSlug, getToken, tokenExpiresSoon } from './tokenStorage'
+import { clearAuth, getSlug, getToken } from './tokenStorage'
 
-export { clearAuth, getSlug, getToken } from './tokenStorage'
+export { clearAuth, getSlug, getToken, saveAuth } from './tokenStorage'
 
 // ─── Tipos comunes de respuesta del backend ───────────────────────────────────
 
@@ -22,7 +21,7 @@ export interface ApiResponse<T> {
   errores: { campo: string; detalle: string }[]
 }
 
-type AuthRequestConfig = InternalAxiosRequestConfig & { skipAuth?: boolean; retried?: boolean }
+type AuthRequestConfig = InternalAxiosRequestConfig & { skipAuth?: boolean }
 
 // ─── Cliente Axios ─────────────────────────────────────────────────────────────
 
@@ -34,10 +33,6 @@ const apiClient: AxiosInstance = axios.create({
 })
 
 apiClient.interceptors.request.use(async (config: AuthRequestConfig) => {
-  if (!config.skipAuth && tokenExpiresSoon()) {
-    await refreshIdToken()
-  }
-
   if (!config.skipAuth) {
     const token = getToken()
     if (token) {
@@ -57,16 +52,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const config = error.config as AuthRequestConfig | undefined
-    if (error.response?.status === 401 && config && !config.skipAuth && !config.retried) {
-      config.retried = true
-      const next = await refreshIdToken()
-      if (next) {
-        config.headers.Authorization = `Bearer ${next}`
-        return apiClient.request(config)
-      }
-      clearAuth()
-      window.location.href = '/login'
-    } else if (error.response?.status === 401 && config && !config.skipAuth) {
+    if (error.response?.status === 401 && config && !config.skipAuth) {
       clearAuth()
       window.location.href = '/login'
     }
