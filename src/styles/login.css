@@ -22,36 +22,56 @@
 }
 
 .login-branding {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: flex-start;
   min-height: 620px;
-  padding: 56px;
+  box-sizing: border-box;
+  padding: clamp(48px, 6vw, 76px);
   overflow: hidden;
   color: #fff;
-  background: linear-gradient(155deg, #0d4d78, #147eaf);
+  background: linear-gradient(155deg, #0d4d78 0%, #116b9d 58%, #147eaf 100%);
+}
+
+.login-branding::before {
+  position: absolute;
+  z-index: -1;
+  top: -150px;
+  right: -140px;
+  width: 360px;
+  height: 360px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  box-shadow: 0 0 0 58px rgba(255, 255, 255, 0.035), 0 0 0 116px rgba(255, 255, 255, 0.025);
+  content: '';
 }
 
 .login-branding h1 {
-  max-width: 500px;
-  margin: 0 0 18px;
+  max-width: 420px;
+  margin: 0 0 20px;
   color: #fff;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1.06;
-  letter-spacing: -1.5px;
+  font-size: clamp(2.25rem, 4vw, 3.35rem);
+  line-height: 1.08;
+  letter-spacing: -1.7px;
 }
 
 .login-branding p {
-  max-width: 490px;
+  max-width: 380px;
   margin: 0;
   color: rgba(255, 255, 255, 0.9);
   font-size: 1.05rem;
+  line-height: 1.55;
 }
 
 .branding-features {
   display: grid;
+  width: 100%;
+  max-width: 380px;
   gap: 12px;
-  margin: 30px 0 0;
+  margin: 36px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -61,6 +81,7 @@
   align-items: center;
   gap: 10px;
   color: rgba(255, 255, 255, 0.96);
+  line-height: 1.35;
 }
 
 .branding-features li::before {
@@ -171,6 +192,82 @@
 
 .btn-primary:active {
   transform: translateY(1px);
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  color: #8a9aaa;
+  font-size: 0.82rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: #e1e8ee;
+}
+
+.btn-google {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border: 1px solid #cfdbe5;
+  border-radius: 9px;
+  background: #fff;
+  color: #29465b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.94rem;
+  font-weight: 600;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+/* En el registro ambos botones son consecutivos; esta separación evita que se perciban como una sola acción. */
+.btn-primary + .btn-google {
+  margin-top: 14px;
+}
+
+.btn-google:hover:not(:disabled) {
+  border-color: #aebfcd;
+  background: #f7fafc;
+}
+
+.btn-google:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.login-mode-link {
+  margin-top: 18px;
+  border: 0;
+  background: transparent;
+  color: #1677ad;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.login-mode-link:hover {
+  text-decoration: underline;
+}
+
+.login-pending-card {
+  grid-template-columns: 1fr;
+  min-height: auto;
+}
+
+.google-mark {
+  color: #4285f4;
+  font-family: Arial, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 @media (max-width: 780px) {

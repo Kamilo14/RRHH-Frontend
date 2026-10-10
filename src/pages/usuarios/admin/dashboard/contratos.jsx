@@ -118,9 +118,18 @@ function Contratos() {
   }
 
   const contratosConEstado = contratos.map((c) => ({ ...c, _estado: calcularEstado(c) }))
+  const nombresPorTrabajador = new Map(trabajadores.map((trabajador) => [
+    trabajador.id,
+    `${trabajador.nombre} ${trabajador.apellido}`.trim(),
+  ]))
+  const contratosPresentables = contratosConEstado.map((contrato) => ({
+    ...contrato,
+    trabajadorNombre: nombresPorTrabajador.get(contrato.trabajadorId) ?? 'Trabajador sin ficha',
+  }))
 
-  const filtrados = contratosConEstado.filter((c) => {
-    const matchSearch = c.trabajadorId.toLowerCase().includes(search.toLowerCase()) ||
+  const filtrados = contratosPresentables.filter((c) => {
+    const matchSearch = c.trabajadorNombre.toLowerCase().includes(search.toLowerCase()) ||
+      c.trabajadorId.toLowerCase().includes(search.toLowerCase()) ||
       (c.tipoContrato ?? '').toLowerCase().includes(search.toLowerCase())
     const matchFiltro = filtro === 'todos' || c._estado === filtro
     return matchSearch && matchFiltro
@@ -163,7 +172,7 @@ function Contratos() {
           <input
             id="contratos-search"
             type="text"
-            placeholder="Buscar por ID trabajador o tipo…"
+            placeholder="Buscar por trabajador o tipo…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -304,7 +313,7 @@ function Contratos() {
           <table className="cont-table">
             <thead>
               <tr>
-                <th>ID Trabajador</th>
+                <th>Trabajador</th>
                 <th>Tipo</th>
                 <th>Inicio</th>
                 <th>Término</th>
@@ -323,7 +332,7 @@ function Contratos() {
               ) : (
                 filtrados.map((c) => (
                   <tr key={c.id}>
-                    <td className="cont-table__name">{c.trabajadorId}</td>
+                    <td className="cont-table__name">{c.trabajadorNombre}</td>
                     <td>{TIPO_LABELS[c.tipoContrato] ?? c.tipoContrato}</td>
                     <td>{formatFecha(c.fechaInicio)}</td>
                     <td>
@@ -342,19 +351,21 @@ function Contratos() {
                         <button 
                           type="button" 
                           className="cont-action-btn" 
-                          title="Ver detalles del contrato"
+                          title="Ver detalle del contrato"
+                          aria-label={`Ver detalle del contrato de ${c.trabajadorNombre}`}
                           onClick={() => alert('Funcionalidad de ver contrato en desarrollo')}
                         >
-                          👁 Ver
+                          Ver detalle
                         </button>
                         {c.activo && (
                           <button
                             type="button"
                             className="cont-action-btn cont-action-btn--danger"
                             title="Finalizar contrato"
+                            aria-label={`Finalizar contrato de ${c.trabajadorNombre}`}
                             onClick={() => handleFinalizar(c.id)}
                           >
-                            ✕ Finalizar
+                            Finalizar
                           </button>
                         )}
                       </div>

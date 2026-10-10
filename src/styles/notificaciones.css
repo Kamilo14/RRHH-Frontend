@@ -1,0 +1,24 @@
+.notif-page { display: grid; gap: 16px; }
+.notif-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.notif-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 9px; background: #eef4f8; }
+.notif-tab, .notif-reload { border: 0; background: transparent; color: #7890a0; cursor: pointer; font: inherit; font-size: .79rem; font-weight: 600; }
+.notif-tab { padding: 7px 10px; border-radius: 6px; }
+.notif-tab--active { color: #12324c; background: #fff; box-shadow: 0 1px 3px rgba(18,50,76,.1); }
+.notif-tab span { margin-left: 4px; color: #147eaf; }
+.notif-reload { padding: 8px 0; color: #396d86; border-bottom: 1px solid transparent; }
+.notif-reload:hover, .notif-item__action:hover { color: #147eaf; border-bottom-color: currentColor; }
+.notif-list { overflow: hidden; border: 1px solid #e2edf3; border-radius: 12px; background: #fff; }
+.notif-item { display: grid; grid-template-columns: 4px minmax(0,1fr) auto; gap: 14px; align-items: center; min-height: 86px; padding: 15px 18px; border-bottom: 1px solid #edf3f6; }
+.notif-item:last-child { border-bottom: 0; }
+.notif-item__indicator { width: 3px; height: 34px; border-radius: 4px; background: transparent; }
+.notif-item--unread { background: #fbfdfe; }
+.notif-item--unread .notif-item__indicator { background: #2382ad; }
+.notif-item__meta { display: flex; justify-content: space-between; gap: 12px; color: #7890a0; font-size: .7rem; }
+.notif-item__meta span { color: #396d86; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.notif-item h2 { margin: 5px 0 3px; color: #12324c; font-size: .88rem; }
+.notif-item p { margin: 0; color: #617b8b; font-size: .78rem; line-height: 1.4; }
+.notif-item__action { align-self: center; padding: 4px 0; border: 0; border-bottom: 1px solid transparent; color: #396d86; background: transparent; cursor: pointer; font: inherit; font-size: .74rem; font-weight: 600; white-space: nowrap; }
+.notif-state { padding: 28px; border: 1px solid #e2edf3; border-radius: 12px; color: #7890a0; background: #fff; font-size: .84rem; text-align: center; }
+.notif-state--error { color: #a34a4a; background: #fffafa; border-color: #f0d3d3; }
+.notif-state button { margin-left: 8px; border: 0; color: inherit; background: transparent; cursor: pointer; font: inherit; font-weight: 700; text-decoration: underline; }
+@media (max-width: 620px) { .notif-item { grid-template-columns: 3px 1fr; } .notif-item__action { grid-column: 2; justify-self: start; } }

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { listarRoles, crearRol, eliminarRol, listarPermisosRol, asignarPermiso, removerPermiso } from '../../../../services/rolesService'
 import { listarPermisos } from '../../../../services/permisosService'
+import { useAuth } from '../../../../context/AuthContext'
 import './configuracion.css'
+import ConfiguracionBackButton from './ConfiguracionBackButton'
 
-function Roles() {
+function Roles({ onBack }) {
+  const { user } = useAuth()
   const [roles, setRoles] = useState([])
   const [permisos, setPermisos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,6 +21,9 @@ function Roles() {
     nombre: '',
     descripcion: '',
   })
+
+  const esAdminRrhh = ['Admin de RRHH', 'ADMIN_RRHH', 'ROLE_ADMIN_RRHH'].includes(user?.role)
+  const rolesVisibles = esAdminRrhh ? roles.filter((rol) => rol.id !== 'superadmin') : roles
 
   useEffect(() => {
     fetchRoles()
@@ -86,15 +92,15 @@ function Roles() {
 
   return (
     <div className="config-page">
-      <div className="config-header">
-        <h1>Gestión de Roles</h1>
-        <button 
-          className="btn-primary"
-          onClick={() => setShowForm(true)}
-        >
+      <header className="config-header">
+        <div className="config-header__title">
+          <ConfiguracionBackButton onBack={onBack} />
+          <h1>Gestión de Roles</h1>
+        </div>
+        <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
           <span aria-hidden="true">＋</span> Nuevo rol
         </button>
-      </div>
+      </header>
 
       {/* Formulario de nuevo rol */}
       {showForm && (
@@ -161,12 +167,12 @@ function Roles() {
       {/* Lista de roles */}
       {!loading && !error && (
         <div className="config-list">
-          {roles.length === 0 ? (
+          {rolesVisibles.length === 0 ? (
             <div className="config-empty">
               No hay roles configurados. Crea el primer rol para comenzar.
             </div>
           ) : (
-            roles.map((rol) => (
+            rolesVisibles.map((rol) => (
               <div key={rol.id} className="config-card">
                 <div className="config-card__header">
                   <div>
@@ -183,15 +189,17 @@ function Roles() {
                     className="btn-secondary"
                     onClick={() => handleGestionarPermisos(rol)}
                   >
-                    ☷ Gestionar permisos
+                    ☷ {rol.esPersonalizado ? 'Gestionar permisos' : 'Ver permisos'}
                   </button>
-                  <button
-                    type="button"
-                    className="btn-danger"
-                    onClick={() => handleEliminarRol(rol.id)}
-                  >
-                    ✕ Eliminar
-                  </button>
+                  {rol.esPersonalizado && (
+                    <button
+                      type="button"
+                      className="btn-danger"
+                      onClick={() => handleEliminarRol(rol.id)}
+                    >
+                      ✕ Eliminar
+                    </button>
+                  )}
                 </div>
               </div>
             ))
@@ -264,6 +272,9 @@ export function PermisosModal({ rol, permisos, onClose }) {
         </div>
 
         <div className="modal-body">
+          <p>{rol.esPersonalizado
+            ? 'Selecciona los permisos que tendrá este rol personalizado.'
+            : 'Los permisos de los roles base son de solo lectura: los microservicios los validan según el rol incluido en el JWT.'}</p>
           {loading ? (
             <div className="trab-state">
               <div className="trab-spinner" />
@@ -286,7 +297,7 @@ export function PermisosModal({ rol, permisos, onClose }) {
                       <input
                         type="checkbox"
                         checked={asignado}
-                        disabled={saving}
+                        disabled={!rol.esPersonalizado || saving}
                         aria-label={`Asignar ${permiso.nombre}`}
                         onChange={() => handleTogglePermiso(permiso.id)}
                       />

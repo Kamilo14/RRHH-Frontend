@@ -23,6 +23,7 @@ export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFo
     departamentoId: '',
     cargoId: '',
     jefaturaId: '',
+    rol: 'TRABAJADOR',
   })
 
   useEffect(() => {
@@ -49,7 +50,9 @@ export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFo
       onSuccess()
       onClose()
     } catch (err: any) {
-      if (err instanceof CuentaPendienteError) setCuentaPendiente(err.trabajador)
+      if (err instanceof CuentaPendienteError) {
+        setCuentaPendiente(err.trabajador)
+      }
       setError(err.message || 'Error al crear trabajador')
     } finally {
       setLoading(false)
@@ -124,32 +127,43 @@ export default function TrabajadorFormModal({ onClose, onSuccess }: TrabajadorFo
 
           <div className="form-group">
             <label htmlFor="departamento">Departamento</label>
-            <select
+            <input
               id="departamento"
+              type="text"
+              list="modal-departamentos-opciones"
               value={formData.departamentoId || ''}
               onChange={(e) => setFormData({ ...formData, departamentoId: e.target.value })}
-            >
-              <option value="">Seleccionar...</option>
-              {departamentos.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.nombre}</option>
-              ))}
-            </select>
+              placeholder="Ej. Recursos Humanos"
+            />
+            <datalist id="modal-departamentos-opciones">
+              {departamentos.map((d) => <option key={d.id} value={d.nombre} />)}
+            </datalist>
           </div>
 
           <div className="form-group">
             <label htmlFor="cargo">Cargo</label>
-            <select
+            <input
               id="cargo"
+              type="text"
+              list="modal-cargos-opciones"
               value={formData.cargoId || ''}
               onChange={(e) => setFormData({ ...formData, cargoId: e.target.value })}
-            >
-              <option value="">Seleccionar...</option>
-              {cargos.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
+              placeholder="Ej. Analista de RRHH"
+            />
+            <datalist id="modal-cargos-opciones">
+              {cargos.map((c) => <option key={c.id} value={c.nombre} />)}
+            </datalist>
           </div>
 
+          <div className="form-group">
+            <label htmlFor="rol">Rol de acceso *</label>
+            <select id="rol" required value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })}>
+              <option value="TRABAJADOR">Trabajador</option>
+              <option value="JEFATURA">Jefatura</option>
+              <option value="ADMIN_RRHH">Admin de RRHH</option>
+            </select>
+            <small>SUPERADMIN no puede ser asignado desde este módulo.</small>
+          </div>
           <div className="form-group">
             <label htmlFor="jefatura">Jefatura</label>
             <input

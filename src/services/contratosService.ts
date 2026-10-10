@@ -13,8 +13,9 @@
  */
 
 import { apiRequest, apiPost, apiPatch, type ApiResponse } from './httpClient'
+import { API_BASE } from './apiConfig'
 
-const BASE = import.meta.env.VITE_API_CONTRATOS as string
+const BASE = API_BASE
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -61,28 +62,34 @@ export interface CalcularLiquidacionRequest {
 
 /** Lista todos los contratos del tenant */
 export async function listarContratos(): Promise<ContratoResponse[]> {
-  const res = await apiRequest<ApiResponse<ContratoResponse[]>>(`${BASE}/contratos`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<ContratoApiResponse[]>>(`${BASE}/contratos`)
+  return res.datos.map(normalizarContrato)
 }
 
 /** Lista los contratos de un trabajador específico */
 export async function contratosDeTrabjador(trabajadorId: string): Promise<ContratoResponse[]> {
-  const res = await apiRequest<ApiResponse<ContratoResponse[]>>(
+  const res = await apiRequest<ApiResponse<ContratoApiResponse[]>>(
     `${BASE}/contratos/trabajador/${trabajadorId}`
   )
-  return res.datos
+  return res.datos.map(normalizarContrato)
 }
 
 /** Obtiene un contrato por ID */
 export async function obtenerContrato(id: string): Promise<ContratoResponse> {
-  const res = await apiRequest<ApiResponse<ContratoResponse>>(`${BASE}/contratos/${id}`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<ContratoApiResponse>>(`${BASE}/contratos/${id}`)
+  return normalizarContrato(res.datos)
 }
 
 /** Crea un nuevo contrato */
 export async function crearContrato(data: CrearContratoRequest): Promise<ContratoResponse> {
-  const res = await apiPost<ApiResponse<ContratoResponse>>(`${BASE}/contratos`, data)
-  return res.datos
+  const res = await apiPost<ApiResponse<ContratoApiResponse>>(`${BASE}/contratos`, {
+    trabajador_id: data.trabajadorId,
+    salario_base: data.salarioBase,
+    tipo_contrato: data.tipoContrato,
+    fecha_inicio: data.fechaInicio,
+    fecha_termino: data.fechaTermino,
+  })
+  return normalizarContrato(res.datos)
 }
 
 /** Actualiza datos de un contrato */
@@ -90,14 +97,19 @@ export async function actualizarContrato(
   id: string,
   data: ActualizarContratoRequest
 ): Promise<ContratoResponse> {
-  const res = await apiPatch<ApiResponse<ContratoResponse>>(`${BASE}/contratos/${id}`, data)
-  return res.datos
+  const res = await apiPatch<ApiResponse<ContratoApiResponse>>(`${BASE}/contratos/${id}`, {
+    salario_base: data.salarioBase,
+    tipo_contrato: data.tipoContrato,
+    fecha_inicio: data.fechaInicio,
+    fecha_termino: data.fechaTermino,
+  })
+  return normalizarContrato(res.datos)
 }
 
 /** Finaliza (cierra) un contrato */
 export async function finalizarContrato(id: string): Promise<ContratoResponse> {
-  const res = await apiPost<ApiResponse<ContratoResponse>>(`${BASE}/contratos/${id}/finalizar`, {})
-  return res.datos
+  const res = await apiPost<ApiResponse<ContratoApiResponse>>(`${BASE}/contratos/${id}/finalizar`, {})
+  return normalizarContrato(res.datos)
 }
 
 /** Calcula la liquidación de sueldo para un período */
@@ -109,4 +121,34 @@ export async function calcularLiquidacion(
     data
   )
   return res.datos
+}
+
+interface ContratoApiResponse {
+  id: string
+  tenant_id?: string
+  tenantId?: string
+  trabajador_id?: string
+  trabajadorId?: string
+  salario_base?: number
+  salarioBase?: number
+  tipo_contrato?: string
+  tipoContrato?: string
+  fecha_inicio?: string
+  fechaInicio?: string
+  fecha_termino?: string | null
+  fechaTermino?: string | null
+  activo: boolean
+}
+
+function normalizarContrato(contrato: ContratoApiResponse): ContratoResponse {
+  return {
+    id: contrato.id,
+    tenantId: contrato.tenantId ?? contrato.tenant_id ?? '',
+    trabajadorId: contrato.trabajadorId ?? contrato.trabajador_id ?? '',
+    salarioBase: contrato.salarioBase ?? contrato.salario_base ?? 0,
+    tipoContrato: contrato.tipoContrato ?? contrato.tipo_contrato ?? '',
+    fechaInicio: contrato.fechaInicio ?? contrato.fecha_inicio ?? '',
+    fechaTermino: contrato.fechaTermino ?? contrato.fecha_termino ?? null,
+    activo: contrato.activo,
+  }
 }

@@ -12,6 +12,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 15px 16px;
+  border: 1px solid #e2edf3;
+  border-radius: 10px;
+  background: #fff;
   flex-wrap: wrap;
 }
 
@@ -37,7 +41,7 @@
 
 .asist-stats {
   display: flex;
-  gap: 22px;
+  gap: 0;
   flex-wrap: wrap;
 }
 
@@ -46,18 +50,23 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
+  min-width: 76px;
+  padding: 0 14px;
+  border-left: 1px solid #e7eef2;
 }
 
+.asist-stat:first-child { border-left: 0; }
+
 .asist-stat__value {
-  font-size: 1.6rem;
-  font-weight: 800;
+  font-size: 1.2rem;
+  font-weight: 700;
   line-height: 1;
 }
 
-.asist-stat__value--green { color: #1a6b4a; }
-.asist-stat__value--red { color: #b03030; }
-.asist-stat__value--orange { color: #b26c0a; }
-.asist-stat__value--blue { color: #147eaf; }
+.asist-stat__value--green,
+.asist-stat__value--red,
+.asist-stat__value--orange,
+.asist-stat__value--blue { color: #12324c; }
 
 .asist-stat__label {
   color: #7890a0;
@@ -68,9 +77,9 @@
 /* Progress bar */
 .asist-progress-bar {
   position: relative;
-  height: 38px;
-  border-radius: 20px;
-  background: #e9f3f8;
+  height: 7px;
+  border-radius: 999px;
+  background: #e5edf2;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -81,28 +90,76 @@
   left: 0;
   top: 0;
   bottom: 0;
-  border-radius: 20px;
-  background: linear-gradient(90deg, #48b68a, #147eaf);
+  border-radius: 999px;
+  background: #2382ad;
   transition: width 500ms ease;
 }
 
 .asist-progress-bar span {
-  position: relative;
-  z-index: 1;
-  padding-left: 16px;
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 700;
-  mix-blend-mode: multiply;
-  filter: invert(1);
+  position: absolute;
+  top: 12px;
+  left: 0;
+  padding: 0;
+  color: #7890a0;
+  font-size: 0.74rem;
+  font-weight: 500;
 }
 
 /* Toolbar */
 .asist-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  margin-top: 13px;
   flex-wrap: wrap;
+}
+
+.asist-date-filter {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d9e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.asist-date-filter__quick {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  color: #7890a0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.asist-date-filter__quick--active {
+  color: #12324c;
+  background: #eef4f8;
+}
+
+.asist-date-filter__input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border-left: 1px solid #e7eef2;
+  color: #7890a0;
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.asist-date-filter__input input {
+  width: 124px;
+  border: 0;
+  outline: none;
+  color: #12324c;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
 }
 
 .asist-search {
@@ -210,32 +267,34 @@
 
 .asist-table tbody tr:last-child td { border-bottom: 0; }
 .asist-table tbody tr:hover td { background: #f8fbfd; }
-.asist-table__name { font-weight: 600; }
+.asist-table__name { font-weight: 600; white-space: nowrap; }
 .asist-table__time { font-variant-numeric: tabular-nums; color: #555; }
 
 .asist-badge {
   display: inline-block;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
 }
 
-.asist-badge--green { color: #1a6b4a; background: #d8f5e8; }
-.asist-badge--blue { color: #0d4d78; background: #d4eeff; }
-.asist-badge--red { color: #b03030; background: #fde8e8; }
-.asist-badge--orange { color: #b26c0a; background: #fff3d0; }
+.asist-badge--green { color: #287253; background: #edf8f2; }
+.asist-badge--blue { color: #28687f; background: #edf7fa; }
+.asist-badge--red { color: #ad4545; background: #fff0f0; }
+.asist-badge--orange { color: #9b6715; background: #fff7e9; }
 
 .asist-action-btn {
-  padding: 6px 12px;
-  border: 1px solid #d9e8f0;
-  border-radius: 7px;
-  color: #147eaf;
+  padding: 5px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: #396d86;
   background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 0.78rem;
-  transition: background 140ms;
+  font-size: 0.76rem;
+  font-weight: 600;
+  transition: color 140ms, border-color 140ms;
 }
 
-.asist-action-btn:hover { background: #eef9fd; }
+.asist-action-btn:hover { color: #147eaf; border-bottom-color: #147eaf; }

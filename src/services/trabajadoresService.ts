@@ -14,8 +14,9 @@
 
 import { apiRequest, apiPost, apiPatch, apiDelete, type ApiResponse } from './httpClient'
 import { invitarUsuario } from './identityService'
+import { API_BASE } from './apiConfig'
 
-const BASE = import.meta.env.VITE_API_TRABAJADORES as string
+const BASE = API_BASE
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export interface TrabajadorResponse {
   jefaturaId: string | null
   diasVacacionesDisponibles: number
   activo: boolean
+  rol?: string
 }
 
 export interface Departamento {
@@ -55,6 +57,7 @@ export interface CrearTrabajadorRequest {
   departamentoId?: string
   cargoId?: string
   jefaturaId?: string
+  rol?: string
 }
 
 export type ActualizarTrabajadorRequest = Partial<CrearTrabajadorRequest>
@@ -63,14 +66,14 @@ export type ActualizarTrabajadorRequest = Partial<CrearTrabajadorRequest>
 
 /** Lista todos los trabajadores activos del tenant */
 export async function listarTrabajadores(): Promise<TrabajadorResponse[]> {
-  const res = await apiRequest<ApiResponse<TrabajadorResponse[]>>(`${BASE}/trabajadores`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<TrabajadorApiResponse[]>>(`${BASE}/trabajadores`)
+  return res.datos.map(normalizarTrabajador)
 }
 
 /** Obtiene la ficha de un trabajador por su ID */
 export async function obtenerTrabajador(id: string): Promise<TrabajadorResponse> {
-  const res = await apiRequest<ApiResponse<TrabajadorResponse>>(`${BASE}/trabajadores/${id}`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<TrabajadorApiResponse>>(`${BASE}/trabajadores/${id}`)
+  return normalizarTrabajador(res.datos)
 }
 
 /** Crea un nuevo trabajador */
@@ -83,14 +86,16 @@ export async function crearTrabajador(data: CrearTrabajadorRequest): Promise<Tra
     cargo_id: data.cargoId || null,
     jefatura_id: data.jefaturaId || null,
   })
-  return res.datos
+  return normalizarTrabajador(res.datos)
 }
 
 export class CuentaPendienteError extends Error {
   trabajador: TrabajadorResponse
-  constructor(trabajador: TrabajadorResponse, cause: unknown) {
-    super(`La ficha ya está creada, pero la cuenta no se pudo completar. ${cause instanceof Error ? cause.message : ''} Pulsa Guardar para reintentar solo la cuenta.`)
+  rol: string
+  constructor(trabajador: TrabajadorResponse, cause: unknown, rol: string) {
+    super(`La ficha ya está creada, pero la cuenta no se pudo completar. ${cause instanceof Error ? cause.message : ''} Usa “Sincronizar cuenta” para volver a intentarlo.`)
     this.trabajador = trabajador
+    this.rol = rol
   }
 }
 
@@ -102,10 +107,11 @@ export async function crearTrabajadorConCuenta(data: CrearTrabajadorRequest, pen
       nombre: `${trabajador.nombre} ${trabajador.apellido}`,
       trabajadorId: trabajador.id,
       crearEnCognito: true,
+      rol: data.rol ?? 'TRABAJADOR',
     })
     return trabajador
   } catch (error) {
-    throw new CuentaPendienteError(trabajador, error)
+    throw new CuentaPendienteError(trabajador, error, data.rol ?? 'TRABAJADOR')
   }
 }
 
@@ -114,8 +120,16 @@ export async function actualizarTrabajador(
   id: string,
   data: ActualizarTrabajadorRequest
 ): Promise<TrabajadorResponse> {
-  const res = await apiPatch<ApiResponse<TrabajadorResponse>>(`${BASE}/trabajadores/${id}`, data)
-  return res.datos
+  const res = await apiPatch<ApiResponse<TrabajadorResponse>>(`${BASE}/trabajadores/${id}`, {
+    nombre: data.nombre,
+    apellido: data.apellido,
+    email: data.email,
+    telefono: data.telefono || null,
+    departamentoId: data.departamentoId || null,
+    cargoId: data.cargoId || null,
+    jefaturaId: data.jefaturaId || null,
+  })
+  return normalizarTrabajador(res.datos)
 }
 
 /** Desactiva un trabajador (soft delete) */
@@ -125,12 +139,78 @@ export async function desactivarTrabajador(id: string): Promise<void> {
 
 /** Lista los departamentos disponibles del tenant */
 export async function listarDepartamentos(): Promise<Departamento[]> {
-  const res = await apiRequest<ApiResponse<Departamento[]>>(`${BASE}/departamentos`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<DepartamentoApiResponse[]>>(`${BASE}/departamentos`)
+  return res.datos.map((departamento) => ({
+    id: departamento.id,
+    nombre: departamento.nombre ?? departamento.nombre_departamento ?? '',
+    tenantId: departamento.tenantId ?? departamento.tenant_id,
+  }))
 }
 
 /** Lista los cargos disponibles del tenant */
 export async function listarCargos(): Promise<Cargo[]> {
-  const res = await apiRequest<ApiResponse<Cargo[]>>(`${BASE}/cargos`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<CargoApiResponse[]>>(`${BASE}/cargos`)
+  return res.datos.map((cargo) => ({
+    id: cargo.id,
+    nombre: cargo.nombre ?? cargo.nombre_cargo ?? '',
+    tenantId: cargo.tenantId ?? cargo.tenant_id,
+  }))
+}
+
+interface TrabajadorApiResponse {
+  id: string
+  tenantId?: string
+  tenant_id?: string
+  nombre: string
+  apellido: string
+  rutTrabajador?: string
+  rut_trabajador?: string
+  email: string
+  telefono: string | null
+  departamentoId?: string | null
+  departamento_id?: string | null
+  cargoId?: string | null
+  cargo_id?: string | null
+  jefaturaId?: string | null
+  jefatura_id?: string | null
+  diasVacacionesDisponibles?: number
+  dias_vacaciones_disponibles?: number
+  rol?: string
+  activo: boolean
+}
+
+interface DepartamentoApiResponse {
+  id: string
+  nombre?: string
+  nombre_departamento?: string
+  tenantId?: string
+  tenant_id: string
+}
+
+interface CargoApiResponse {
+  id: string
+  nombre?: string
+  nombre_cargo?: string
+  tenantId?: string
+  tenant_id: string
+}
+
+function normalizarTrabajador(trabajador: TrabajadorApiResponse): TrabajadorResponse {
+  return {
+    id: trabajador.id,
+    tenantId: trabajador.tenantId ?? trabajador.tenant_id ?? '',
+    nombre: trabajador.nombre,
+    apellido: trabajador.apellido,
+    rutTrabajador: trabajador.rutTrabajador ?? trabajador.rut_trabajador ?? '',
+    email: trabajador.email,
+    telefono: trabajador.telefono,
+    departamentoId: trabajador.departamentoId ?? trabajador.departamento_id ?? null,
+    cargoId: trabajador.cargoId ?? trabajador.cargo_id ?? null,
+    jefaturaId: trabajador.jefaturaId ?? trabajador.jefatura_id ?? null,
+    diasVacacionesDisponibles: trabajador.diasVacacionesDisponibles
+      ?? trabajador.dias_vacaciones_disponibles
+      ?? 0,
+    activo: trabajador.activo,
+    rol: trabajador.rol,
+  }
 }

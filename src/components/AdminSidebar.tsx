@@ -1,4 +1,9 @@
 import '../styles/AdminSidebar.css'
+import { useEffect, useState } from 'react'
+import { useAuth as useOidcAuth } from 'react-oidc-context'
+import { clearAuth } from '../services/httpClient'
+import { signOutRedirect } from '../config/oidcConfig'
+import { contarNoLeidas } from '../services/notificacionesService'
 
 export type AdminSection =
   | 'resumen'
@@ -7,13 +12,14 @@ export type AdminSection =
   | 'asistencia'
   | 'ausencias'
   | 'notificaciones'
+  | 'configuracion'
   | 'configuracion-cuenta'
   | 'configuracion-roles'
-  | 'configuracion-permisos'
 
 type AdminSidebarProps = {
   activeSection: AdminSection
   onSectionChange: (section: AdminSection) => void
+  notificationRefreshKey?: number
 }
 
 type NavigationItem = {
@@ -31,7 +37,20 @@ const navigationItems: NavigationItem[] = [
   { id: 'notificaciones', label: 'Notificaciones', icon: '♢' },
 ]
 
-function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
+function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey = 0 }: AdminSidebarProps) {
+  const oidcAuth = useOidcAuth()
+  const [noLeidas, setNoLeidas] = useState(0)
+
+  useEffect(() => {
+    contarNoLeidas().then((respuesta) => setNoLeidas(respuesta.count)).catch(() => setNoLeidas(0))
+  }, [notificationRefreshKey])
+
+  const handleSignOut = async () => {
+    clearAuth()
+    await oidcAuth.removeUser()
+    signOutRedirect()
+  }
+
   return (
     <aside className="admin-sidebar">
       <div className="admin-sidebar__brand">
@@ -62,7 +81,7 @@ function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
           >
             <span className="admin-sidebar__icon" aria-hidden="true">{item.icon}</span>
             <span>{item.label}</span>
-            {item.id === 'notificaciones' && <span className="admin-sidebar__badge">3</span>}
+            {item.id === 'notificaciones' && noLeidas > 0 && <span className="admin-sidebar__badge">{noLeidas > 99 ? '99+' : noLeidas}</span>}
           </button>
         ))}
 
@@ -70,15 +89,15 @@ function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
 
       <div className="admin-sidebar__footer">
         <button
-          className={`admin-sidebar__footer-link${activeSection.startsWith('configuracion-') ? ' admin-sidebar__footer-link--active' : ''}`}
+          className={`admin-sidebar__footer-link${activeSection.startsWith('configuracion') ? ' admin-sidebar__footer-link--active' : ''}`}
           type="button"
-          onClick={() => onSectionChange('configuracion-cuenta')}
-          aria-current={activeSection.startsWith('configuracion-') ? 'page' : undefined}
+          onClick={() => onSectionChange('configuracion')}
+          aria-current={activeSection.startsWith('configuracion') ? 'page' : undefined}
         >
           <span aria-hidden="true">⚙</span>
           Configuración
         </button>
-        <button className="admin-sidebar__footer-link admin-sidebar__footer-link--logout" type="button">
+        <button className="admin-sidebar__footer-link admin-sidebar__footer-link--logout" type="button" onClick={() => void handleSignOut()}>
           <span aria-hidden="true">↪</span>
           Cerrar sesión
         </button>

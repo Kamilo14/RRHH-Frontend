@@ -3,6 +3,16 @@
   gap: 25px;
 }
 
+.admin-dashboard-notice {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid #f1d7a7;
+  border-radius: 9px;
+  color: #7d5b1d;
+  background: #fffaf0;
+  font-size: 0.78rem;
+}
+
 .admin-welcome {
   display: flex;
   align-items: center;
@@ -113,6 +123,12 @@
 .admin-panel h2 {
   margin: 7px 0 0;
   font-size: 1.08rem;
+}
+
+.admin-panel__empty {
+  margin: 24px 0 0;
+  color: #7890a0;
+  font-size: 0.78rem;
 }
 
 .admin-panel__heading button {

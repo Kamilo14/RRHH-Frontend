@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { listarPermisos, crearPermiso } from '../../../../services/permisosService'
 import { listarRoles } from '../../../../services/rolesService'
+import { useAuth } from '../../../../context/AuthContext'
 import { PermisosModal } from './roles'
 import './configuracion.css'
+import ConfiguracionBackButton from './ConfiguracionBackButton'
 
-function Permisos() {
+function Permisos({ onBack }) {
+  const { user } = useAuth()
   const [permisos, setPermisos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -20,6 +23,9 @@ function Permisos() {
     descripcion: '',
     categoria: '',
   })
+
+  const esAdminRrhh = ['Admin de RRHH', 'ADMIN_RRHH', 'ROLE_ADMIN_RRHH'].includes(user?.role)
+  const rolesVisibles = esAdminRrhh ? roles.filter((rol) => rol.id !== 'superadmin') : roles
 
   useEffect(() => {
     fetchPermisos()
@@ -71,30 +77,27 @@ function Permisos() {
 
   return (
     <div className="config-page">
-      <div className="config-header">
-        <h1>Catálogo de Permisos</h1>
-        <button 
-          className="btn-primary"
-          onClick={() => setShowForm(true)}
-        >
-          <span aria-hidden="true">＋</span> Nuevo permiso
-        </button>
-      </div>
+      <header className="config-header">
+        <div className="config-header__title">
+          <ConfiguracionBackButton onBack={onBack} />
+          <h1>Catálogo de Permisos</h1>
+        </div>
+      </header>
 
       {!loading && !error && (
         <section className="form-card profile-card__section" aria-label="Asignar permisos a un rol">
-          <h2>Asignar permisos a un rol</h2>
+          <h2>Consultar permisos por rol</h2>
           <div className="form-group">
             <label htmlFor="permiso-rol">Rol</label>
             <select id="permiso-rol" value={rolId} onChange={(event) => setRolId(event.target.value)}>
               <option value="">Selecciona un rol</option>
-              {roles.map((rol) => <option key={rol.id} value={rol.id}>{rol.nombre}</option>)}
+              {rolesVisibles.map((rol) => <option key={rol.id} value={rol.id}>{rol.nombre}</option>)}
             </select>
           </div>
-          <button type="button" className="btn-primary" disabled={!rolId} onClick={() => setSelectedRol(roles.find((rol) => rol.id === rolId))}>
-            Asignar permisos
+          <button type="button" className="btn-primary" disabled={!rolId} onClick={() => setSelectedRol(rolesVisibles.find((rol) => rol.id === rolId))}>
+            Ver permisos
           </button>
-          {roles.length === 0 && <p>Crea un rol en la sección Roles para asignarle permisos.</p>}
+          {rolesVisibles.length === 0 && <p>No hay roles disponibles para consultar.</p>}
         </section>
       )}
       {selectedRol && <PermisosModal rol={selectedRol} permisos={permisos} onClose={() => setSelectedRol(null)} />}
