@@ -22,6 +22,15 @@ export function getSlug(): string | null {
   return localStorage.getItem(SLUG_KEY)
 }
 
+/** Compatibilidad para los flujos de inicio de sesión que reciben solo un ID token. */
+export function saveAuth(token: string, slug: string): void {
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(SLUG_KEY, slug)
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem(TOKEN_EXP_KEY)
+}
+
 export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
