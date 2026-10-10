@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { getMe, type MeResponse } from '../services/identityService'
 import { getToken, clearAuth } from '../services/httpClient'
 
@@ -19,7 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = !!user && !!getToken()
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const userData = await getMe()
       setUser(userData)
@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     const token = getToken()
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setIsLoading(false)
     }
-  }, [])
+  }, [refreshUser])
 
   const login = async () => {
     await refreshUser()

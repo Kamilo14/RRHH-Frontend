@@ -153,38 +153,38 @@
 /* Summary cards */
 .inas-summary {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .inas-summary-card {
   flex: 1;
-  min-width: 130px;
+  min-width: 150px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  border-radius: 13px;
-  border: 1px solid transparent;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2edf3;
+  border-left-width: 3px;
+  border-radius: 9px;
+  background: #fff;
 }
 
-.inas-summary-card--orange { background: #fff6e8; border-color: #f5d8a0; }
-.inas-summary-card--green { background: #edfaf3; border-color: #bce7d4; }
-.inas-summary-card--red { background: #fff2f2; border-color: #f5c2c2; }
+.inas-summary-card--orange { border-left-color: #d89a3e; }
+.inas-summary-card--green { border-left-color: #48a980; }
+.inas-summary-card--red { border-left-color: #d66a6a; }
 
 .inas-summary-card__count {
-  font-size: 1.8rem;
-  font-weight: 800;
+  font-size: 1.25rem;
+  font-weight: 700;
   line-height: 1;
 }
 
-.inas-summary-card--orange .inas-summary-card__count { color: #b26c0a; }
-.inas-summary-card--green .inas-summary-card__count { color: #1a6b4a; }
-.inas-summary-card--red .inas-summary-card__count { color: #b03030; }
+.inas-summary-card__count { color: #12324c; }
 
 .inas-summary-card__label {
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 500;
   color: #7890a0;
 }
 
@@ -286,7 +286,7 @@
 }
 
 .inas-card {
-  padding: 20px 22px;
+  padding: 18px 20px;
   border: 1px solid #e2edf3;
   border-left: 4px solid transparent;
   border-radius: 14px;
@@ -294,7 +294,7 @@
   transition: box-shadow 150ms;
 }
 
-.inas-card:hover { box-shadow: 0 4px 16px rgba(18, 50, 76, 0.08); }
+.inas-card:hover { box-shadow: 0 3px 12px rgba(18, 50, 76, 0.06); }
 
 .inas-card--orange { border-left-color: #e8a34e; }
 .inas-card--green { border-left-color: #48b68a; }
@@ -354,15 +354,15 @@
 
 .inas-badge {
   display: inline-block;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
 }
 
-.inas-badge--orange { color: #b26c0a; background: #fff3d0; }
-.inas-badge--green { color: #1a6b4a; background: #d8f5e8; }
-.inas-badge--red { color: #b03030; background: #fde8e8; }
+.inas-badge--orange { color: #9b6715; background: #fff7e9; }
+.inas-badge--green { color: #287253; background: #edf8f2; }
+.inas-badge--red { color: #ad4545; background: #fff0f0; }
 
 .inas-card__dates {
   display: flex;
@@ -384,7 +384,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .inas-card__motivo {
@@ -399,29 +399,29 @@
 
 .inas-card__actions {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 14px;
+  margin-top: 12px;
 }
 
 .inas-action-btn {
-  padding: 8px 16px;
+  padding: 5px 0;
   border: 0;
-  border-radius: 8px;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
   cursor: pointer;
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  transition: opacity 140ms;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: transparent;
+  transition: color 140ms, border-color 140ms;
 }
 
-.inas-action-btn:hover { opacity: 0.85; }
+.inas-action-btn:hover { border-bottom-color: currentColor; }
 
 .inas-action-btn--approve {
-  color: #fff;
-  background: #48b68a;
+  color: #287253;
 }
 
 .inas-action-btn--reject {
-  color: #b03030;
-  background: #fde8e8;
+  color: #ad4545;
 }

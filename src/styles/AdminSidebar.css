@@ -69,6 +69,10 @@
   text-transform: uppercase;
 }
 
+.admin-sidebar__section-title--configuration {
+  margin-top: 22px;
+}
+
 .admin-sidebar__tenant strong {
   font-size: 0.91rem;
 }

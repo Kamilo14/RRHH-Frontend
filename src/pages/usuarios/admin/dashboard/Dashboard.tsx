@@ -1,28 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../../../context/AuthContext'
+import { getToken } from '../../../../services/httpClient'
 import AdminSidebar, { type AdminSection } from '../../../../components/AdminSidebar'
 import Trabajadores from './trabajadores'
 import Contratos from './contratos'
 import Asistencia from './asistencia'
 import Inasistencia from './inasistencia'
+import Notificaciones from './notificaciones'
 import Roles from '../configuracion/roles'
-import Permisos from '../configuracion/permisos'
 import MiCuenta from '../configuracion/miCuenta'
+import Configuracion from '../configuracion/Configuracion'
 import '../../../../styles/admin.css'
 import '../../../../styles/Dashboard.css'
-
-type SummaryCard = {
-  label: string
-  value: string
-  detail: string
-  tone: 'blue' | 'green' | 'orange' | 'purple'
-}
-
-const summaryCards: SummaryCard[] = [
-  { label: 'Trabajadores activos', value: '128', detail: '+8% este mes', tone: 'blue' },
-  { label: 'Contratos vigentes', value: '119', detail: '9 por revisar', tone: 'green' },
-  { label: 'Asistencia de hoy', value: '94%', detail: '121 trabajadores registrados', tone: 'orange' },
-  { label: 'Ausencias pendientes', value: '07', detail: '3 requieren atención', tone: 'purple' },
-]
+import { listarTrabajadores, type TrabajadorResponse } from '../../../../services/trabajadoresService'
+import { listarContratos, type ContratoResponse } from '../../../../services/contratosService'
+import { listarMarcasAsistencia, type MarcaAsistenciaResponse } from '../../../../services/asistenciaService'
+import { listarSolicitudesAusencia, type SolicitudAusenciaResponse } from '../../../../services/ausenciasService'
 
 const sectionTitles: Record<AdminSection, string> = {
   resumen: 'Resumen general',
@@ -31,13 +24,48 @@ const sectionTitles: Record<AdminSection, string> = {
   asistencia: 'Asistencia',
   ausencias: 'Ausencias / Inasistencias',
   notificaciones: 'Notificaciones',
+  configuracion: 'Configuración',
   'configuracion-cuenta': 'Configuración / Mi cuenta',
   'configuracion-roles': 'Configuración / Roles',
-  'configuracion-permisos': 'Configuración / Permisos',
+}
+
+type CognitoClaims = {
+  name?: string
+  given_name?: string
+}
+
+function getCognitoDisplayName(): string | null {
+  const token = getToken()
+  if (!token) {
+    return null
+  }
+
+  const payload = token.split('.')[1]
+  if (!payload) {
+    return null
+  }
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const claims = JSON.parse(atob(normalizedPayload)) as CognitoClaims
+    return claims.name?.trim() || claims.given_name?.trim() || null
+  } catch {
+    return null
+  }
 }
 
 function Dashboard() {
   const [activeSection, setActiveSection] = useState<AdminSection>('resumen')
+  const [notificationRefreshKey, setNotificationRefreshKey] = useState(0)
+  const { user } = useAuth()
+  const isConfigurationSection = activeSection.startsWith('configuracion')
+  const displayName = user?.nombre || getCognitoDisplayName() || user?.email || 'Usuario'
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
 
   const renderSection = () => {
     switch (activeSection) {
@@ -52,20 +80,13 @@ function Dashboard() {
       case 'ausencias':
         return <Inasistencia />
       case 'notificaciones':
-        return (
-          <section className="admin-empty-state">
-            <div className="admin-empty-state__icon">♢</div>
-            <h2>Notificaciones</h2>
-            <p>Aquí aparecerán las alertas y notificaciones del sistema. Esta vista se conectará con el microservicio de notificaciones.</p>
-            <span>Próximamente disponible</span>
-          </section>
-        )
+        return <Notificaciones onChange={() => setNotificationRefreshKey((current) => current + 1)} />
+      case 'configuracion':
+        return <Configuracion onSectionChange={setActiveSection} onBack={() => setActiveSection('resumen')} />
       case 'configuracion-roles':
-        return <Roles />
+        return <Roles onBack={() => setActiveSection('configuracion')} />
       case 'configuracion-cuenta':
-        return <MiCuenta />
-      case 'configuracion-permisos':
-        return <Permisos />
+        return <MiCuenta onBack={() => setActiveSection('configuracion')} />
       default:
         return null
     }
@@ -73,42 +94,23 @@ function Dashboard() {
 
   return (
     <div className="admin-shell">
-      <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} notificationRefreshKey={notificationRefreshKey} />
       <main className="admin-main">
-        <header className="admin-header">
+        <header className={`admin-header${isConfigurationSection ? ' admin-header--configuration' : ''}`}>
           <div>
             <span className="admin-header__eyebrow">Administración / {sectionTitles[activeSection]}</span>
-            <h1>{sectionTitles[activeSection]}</h1>
+            {!isConfigurationSection && <h1>{sectionTitles[activeSection]}</h1>}
           </div>
           <div className="admin-header__user">
-            <div className="admin-header__avatar">MR</div>
+            <div className="admin-header__avatar">{initials}</div>
             <div>
-              <strong>María Rodríguez</strong>
-              <span>Admin de RRHH</span>
+              <strong>{displayName}</strong>
+              <span>{user?.role || 'Usuario'}</span>
             </div>
             <span className="admin-header__chevron">⌄</span>
           </div>
         </header>
 
-        {activeSection.startsWith('configuracion-') && (
-          <nav className="config-navigation" aria-label="Configuración">
-            {([
-              ['configuracion-cuenta', 'Mi cuenta'],
-              ['configuracion-roles', 'Roles'],
-              ['configuracion-permisos', 'Permisos'],
-            ] as const).map(([section, label]) => (
-              <button
-                key={section}
-                type="button"
-                className={activeSection === section ? 'config-navigation__active' : ''}
-                aria-current={activeSection === section ? 'page' : undefined}
-                onClick={() => setActiveSection(section)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        )}
         {renderSection()}
       </main>
     </div>
@@ -120,53 +122,133 @@ type DashboardOverviewProps = {
 }
 
 function DashboardOverview({ onSectionChange }: DashboardOverviewProps) {
+  const { user } = useAuth()
+  const [trabajadores, setTrabajadores] = useState<TrabajadorResponse[]>([])
+  const [contratos, setContratos] = useState<ContratoResponse[]>([])
+  const [marcas, setMarcas] = useState<MarcaAsistenciaResponse[]>([])
+  const [ausencias, setAusencias] = useState<SolicitudAusenciaResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const displayName = user?.nombre || getCognitoDisplayName() || user?.email || 'usuario'
+  const today = new Intl.DateTimeFormat('es-CL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date())
+
+  useEffect(() => {
+    let vigente = true
+    async function cargarResumen() {
+      setLoading(true)
+      setError(false)
+      const resultados = await Promise.allSettled([
+        listarTrabajadores(),
+        listarContratos(),
+        listarMarcasAsistencia(),
+        listarSolicitudesAusencia(),
+      ])
+
+      if (!vigente) return
+      const [resultadoTrabajadores, resultadoContratos, resultadoMarcas, resultadoAusencias] = resultados
+      if (resultadoTrabajadores.status === 'fulfilled') setTrabajadores(resultadoTrabajadores.value)
+      if (resultadoContratos.status === 'fulfilled') setContratos(resultadoContratos.value)
+      if (resultadoMarcas.status === 'fulfilled') setMarcas(resultadoMarcas.value)
+      if (resultadoAusencias.status === 'fulfilled') setAusencias(resultadoAusencias.value)
+      setError(resultados.some((resultado) => resultado.status === 'rejected'))
+      setLoading(false)
+    }
+    cargarResumen()
+    return () => { vigente = false }
+  }, [])
+
+  const datos = useMemo(() => {
+    const hoyIso = new Date().toISOString().slice(0, 10)
+    const limiteVencimiento = new Date()
+    limiteVencimiento.setDate(limiteVencimiento.getDate() + 30)
+    const activos = trabajadores.filter((trabajador) => trabajador.activo)
+    const vigentes = contratos.filter((contrato) => contrato.activo)
+    const porVencer = vigentes.filter((contrato) => contrato.fechaTermino && new Date(`${contrato.fechaTermino}T12:00:00`) <= limiteVencimiento)
+    const entradasHoy = new Set(
+      marcas
+        .filter((marca) => marca.fechaHora.slice(0, 10) === hoyIso && marca.tipo === 'ENTRADA')
+        .map((marca) => marca.trabajadorId)
+    )
+    const asistencia = activos.length ? Math.round((entradasHoy.size / activos.length) * 100) : 0
+    const pendientes = ausencias.filter((ausencia) => ausencia.estado === 'PENDIENTE')
+    return { activos, vigentes, porVencer, entradasHoy, asistencia, pendientes }
+  }, [trabajadores, contratos, marcas, ausencias])
+
+  const nombreTrabajador = (trabajadorId: string) => {
+    const trabajador = trabajadores.find((item) => item.id === trabajadorId)
+    return trabajador ? `${trabajador.nombre} ${trabajador.apellido}` : 'Trabajador'
+  }
+
   return (
     <div className="dashboard-overview">
       <section className="admin-welcome">
         <div>
-          <span className="admin-welcome__label">Miércoles, 25 de septiembre de 2026</span>
-          <h2>¡Buenos días, María!</h2>
+          <span className="admin-welcome__label">{today}</span>
+          <h2>¡Buenos días, {displayName}!</h2>
           <p>Aquí tienes una vista rápida de la gestión de tu empresa.</p>
         </div>
         <div className="admin-welcome__illustration" aria-hidden="true">✦</div>
       </section>
 
+      {error && <p className="admin-dashboard-notice">Algunos indicadores no pudieron cargarse. Puedes revisar cada módulo para ver el detalle.</p>}
+
       <section className="admin-summary-grid" aria-label="Indicadores principales">
-        {summaryCards.map((card) => (
-          <article className={`admin-summary-card admin-summary-card--${card.tone}`} key={card.label}>
-            <div className="admin-summary-card__top">
-              <span>{card.label}</span>
-              <span className="admin-summary-card__icon" aria-hidden="true">●</span>
-            </div>
-            <strong>{card.value}</strong>
-            <small>{card.detail}</small>
-          </article>
-        ))}
+        <article className="admin-summary-card admin-summary-card--blue">
+          <div className="admin-summary-card__top"><span>Trabajadores activos</span><span className="admin-summary-card__icon">●</span></div>
+          <strong>{loading ? '—' : datos.activos.length}</strong>
+          <small>Dotación vigente</small>
+        </article>
+        <article className="admin-summary-card admin-summary-card--green">
+          <div className="admin-summary-card__top"><span>Contratos vigentes</span><span className="admin-summary-card__icon">●</span></div>
+          <strong>{loading ? '—' : datos.vigentes.length}</strong>
+          <small>{loading ? 'Cargando datos' : `${datos.porVencer.length} por vencer`}</small>
+        </article>
+        <article className="admin-summary-card admin-summary-card--orange">
+          <div className="admin-summary-card__top"><span>Asistencia de hoy</span><span className="admin-summary-card__icon">●</span></div>
+          <strong>{loading ? '—' : `${datos.asistencia}%`}</strong>
+          <small>{loading ? 'Cargando datos' : `${datos.entradasHoy.size} con entrada registrada`}</small>
+        </article>
+        <article className="admin-summary-card admin-summary-card--purple">
+          <div className="admin-summary-card__top"><span>Ausencias pendientes</span><span className="admin-summary-card__icon">●</span></div>
+          <strong>{loading ? '—' : datos.pendientes.length}</strong>
+          <small>Solicitudes por revisar</small>
+        </article>
       </section>
 
       <section className="admin-content-grid">
         <article className="admin-panel">
           <div className="admin-panel__heading">
             <div>
-              <span className="admin-panel__eyebrow">Actividad reciente</span>
-              <h2>Últimos movimientos</h2>
+              <span className="admin-panel__eyebrow">Requiere atención</span>
+              <h2>Alertas de gestión</h2>
             </div>
-            <button type="button" onClick={() => onSectionChange('notificaciones')}>Ver todo</button>
+            <button type="button" onClick={() => onSectionChange(datos.pendientes.length ? 'ausencias' : 'contratos')}>Ver detalle</button>
           </div>
-          <ul className="admin-activity-list">
-            <li>
-              <span className="admin-activity-list__dot admin-activity-list__dot--blue" />
-              <div><strong>Nuevo trabajador registrado</strong><span>Javiera Soto · Hace 12 min</span></div>
-            </li>
-            <li>
-              <span className="admin-activity-list__dot admin-activity-list__dot--green" />
-              <div><strong>Contrato actualizado</strong><span>Diego Morales · Hace 45 min</span></div>
-            </li>
-            <li>
-              <span className="admin-activity-list__dot admin-activity-list__dot--orange" />
-              <div><strong>Solicitud de ausencia recibida</strong><span>Camila Pérez · Hace 1 h</span></div>
-            </li>
-          </ul>
+          {!loading && datos.porVencer.length === 0 && datos.pendientes.length === 0 && (
+            <p className="admin-panel__empty">No hay alertas pendientes para esta empresa.</p>
+          )}
+          {!loading && (datos.porVencer.length > 0 || datos.pendientes.length > 0) && (
+            <ul className="admin-activity-list">
+              {datos.porVencer.slice(0, 3).map((contrato) => (
+                <li key={contrato.id}>
+                  <span className="admin-activity-list__dot admin-activity-list__dot--orange" />
+                  <div><strong>Contrato próximo a vencer</strong><span>{nombreTrabajador(contrato.trabajadorId)} · vence el {contrato.fechaTermino}</span></div>
+                </li>
+              ))}
+              {datos.pendientes.slice(0, 3).map((ausencia) => (
+                <li key={ausencia.id}>
+                  <span className="admin-activity-list__dot admin-activity-list__dot--blue" />
+                  <div><strong>Solicitud de ausencia pendiente</strong><span>{nombreTrabajador(ausencia.trabajadorId)} · desde {ausencia.fechaInicio}</span></div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {loading && <p className="admin-panel__empty">Cargando indicadores de la empresa…</p>}
         </article>
 
         <article className="admin-panel admin-panel--quick-actions">

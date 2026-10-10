@@ -71,6 +71,12 @@ apiClient.interceptors.response.use(
       window.location.href = '/login'
     }
 
+    if (!error.response) {
+      return Promise.reject(new Error(
+        'No se pudo conectar con el servicio solicitado. Verifica que el API Gateway y los servicios conectados a la EC2 estén disponibles.',
+      ))
+    }
+
     let mensaje = `Error ${error.response?.status || 'desconocido'}`
     if (error.response?.data) {
       const errorData = error.response.data as ApiResponse<null>
@@ -124,4 +130,3 @@ export async function apiDelete<T>(url: string): Promise<T> {
 }
 
 export default apiClient
-

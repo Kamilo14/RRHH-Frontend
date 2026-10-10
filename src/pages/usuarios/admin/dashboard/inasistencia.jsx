@@ -6,14 +6,14 @@ import '../../../../styles/modal.css'
 
 const estadoColor = {
   PENDIENTE: 'orange',
-  APROBADA:  'green',
-  RECHAZADA: 'red',
+  APROBADO:  'green',
+  RECHAZADO: 'red',
 }
 
 const estadoLabel = {
   PENDIENTE: 'Pendiente',
-  APROBADA:  'Aprobada',
-  RECHAZADA: 'Rechazada',
+  APROBADO:  'Aprobado',
+  RECHAZADO: 'Rechazado',
 }
 
 function calcularDias(fechaInicio, fechaFin) {
@@ -125,8 +125,18 @@ function Inasistencia() {
     setFormError('')
   }
 
-  const filtradas = solicitudes.filter((s) => {
+  const nombresPorTrabajador = new Map(trabajadores.map((trabajador) => [
+    trabajador.id,
+    `${trabajador.nombre} ${trabajador.apellido}`.trim(),
+  ]))
+  const solicitudesPresentables = solicitudes.map((solicitud) => ({
+    ...solicitud,
+    trabajadorNombre: nombresPorTrabajador.get(solicitud.trabajadorId) ?? 'Trabajador sin ficha',
+  }))
+
+  const filtradas = solicitudesPresentables.filter((s) => {
     const matchSearch =
+      s.trabajadorNombre.toLowerCase().includes(search.toLowerCase()) ||
       s.trabajadorId.toLowerCase().includes(search.toLowerCase()) ||
       (s.tipo ?? '').toLowerCase().includes(search.toLowerCase())
     const matchFiltro = filtro === 'todos' || s.estado === filtro
@@ -135,11 +145,11 @@ function Inasistencia() {
 
   const counts = {
     PENDIENTE: solicitudes.filter(s => s.estado === 'PENDIENTE').length,
-    APROBADA:  solicitudes.filter(s => s.estado === 'APROBADA').length,
-    RECHAZADA: solicitudes.filter(s => s.estado === 'RECHAZADA').length,
+    APROBADO:  solicitudes.filter(s => s.estado === 'APROBADO').length,
+    RECHAZADO: solicitudes.filter(s => s.estado === 'RECHAZADO').length,
   }
 
-  const initials = (id) => id.slice(0, 2).toUpperCase()
+  const initials = (nombre) => nombre.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()
 
   return (
     <div className="inas-page">
@@ -148,8 +158,8 @@ function Inasistencia() {
         <div className="inas-summary">
           {[
             { label: 'Pendientes', count: counts.PENDIENTE, color: 'orange' },
-            { label: 'Aprobadas',  count: counts.APROBADA,  color: 'green'  },
-            { label: 'Rechazadas', count: counts.RECHAZADA, color: 'red'    },
+            { label: 'Aprobadas',  count: counts.APROBADO,  color: 'green'  },
+            { label: 'Rechazadas', count: counts.RECHAZADO, color: 'red'    },
           ].map((item) => (
             <div key={item.label} className={`inas-summary-card inas-summary-card--${item.color}`}>
               <span className="inas-summary-card__count">{item.count}</span>
@@ -166,7 +176,7 @@ function Inasistencia() {
           <input
             id="inasistencia-search"
             type="text"
-            placeholder="Buscar por ID trabajador o tipo…"
+            placeholder="Buscar por trabajador o tipo…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -175,8 +185,8 @@ function Inasistencia() {
           {[
             { key: 'todos',     label: 'Todos'     },
             { key: 'PENDIENTE', label: 'Pendiente' },
-            { key: 'APROBADA',  label: 'Aprobada'  },
-            { key: 'RECHAZADA', label: 'Rechazada' },
+            { key: 'APROBADO',  label: 'Aprobada'  },
+            { key: 'RECHAZADO', label: 'Rechazada' },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -315,9 +325,9 @@ function Inasistencia() {
                 <article key={s.id} className={`inas-card inas-card--${color}`}>
                   <div className="inas-card__header">
                     <div className="inas-card__info">
-                      <div className="inas-card__avatar" aria-hidden="true">{initials(s.trabajadorId)}</div>
+                      <div className="inas-card__avatar" aria-hidden="true">{initials(s.trabajadorNombre)}</div>
                       <div>
-                        <strong className="inas-card__name">{s.trabajadorId}</strong>
+                        <strong className="inas-card__name">{s.trabajadorNombre}</strong>
                         <span className="inas-card__tipo">{s.tipo}</span>
                       </div>
                     </div>
@@ -356,14 +366,14 @@ function Inasistencia() {
                         className="inas-action-btn inas-action-btn--approve"
                         onClick={() => handleAprobar(s.id)}
                       >
-                        ✓ Aprobar
+                        Aprobar
                       </button>
                       <button
                         type="button"
                         className="inas-action-btn inas-action-btn--reject"
                         onClick={() => handleRechazar(s.id)}
                       >
-                        ✕ Rechazar
+                        Rechazar
                       </button>
                     </div>
                   )}

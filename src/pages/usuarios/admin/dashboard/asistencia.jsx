@@ -1,23 +1,28 @@
 import { useState, useEffect, useMemo } from 'react'
 import { listarMarcasAsistencia } from '../../../../services/asistenciaService'
+import { listarTrabajadores } from '../../../../services/trabajadoresService'
 import '../../../../styles/asistencia.css'
 
-const hoyStr = new Date().toLocaleDateString('es-CL', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-})
+function fechaLocalISO(fecha = new Date()) {
+  const offset = fecha.getTimezoneOffset() * 60_000
+  return new Date(fecha.getTime() - offset).toISOString().slice(0, 10)
+}
 
-const HOY_ISO = new Date().toISOString().slice(0, 10)  // "YYYY-MM-DD"
+function textoFecha(fechaISO) {
+  return new Date(`${fechaISO}T12:00:00`).toLocaleDateString('es-CL', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+}
 
 /**
  * A partir de las marcas crudas (entrada/salida) construye
  * una fila por trabajador con su último registro del día.
  */
-function procesarMarcas(marcas) {
-  // filtrar solo las de hoy
-  const deHoy = marcas.filter((m) => m.fechaHora.slice(0, 10) === HOY_ISO)
+function procesarMarcas(marcas, fechaSeleccionada) {
+  const delDia = marcas.filter((m) => m.fechaHora.slice(0, 10) === fechaSeleccionada)
 
   const porTrabajador = {}
-  for (const m of deHoy) {
+  for (const m of delDia) {
     if (!porTrabajador[m.trabajadorId]) {
       porTrabajador[m.trabajadorId] = { trabajadorId: m.trabajadorId, entrada: null, salida: null }
     }
@@ -33,8 +38,8 @@ function procesarMarcas(marcas) {
     else if (r.entrada)         { estado = 'activo' }
 
     if (r.entrada && r.salida) {
-      const e = new Date(`${HOY_ISO}T${r.entrada}`)
-      const s = new Date(`${HOY_ISO}T${r.salida}`)
+      const e = new Date(`${fechaSeleccionada}T${r.entrada}`)
+      const s = new Date(`${fechaSeleccionada}T${r.salida}`)
       const diff = Math.max(0, s - e)
       const h = Math.floor(diff / 3600000)
       const m2 = Math.floor((diff % 3600000) / 60000)
@@ -58,8 +63,21 @@ function Asistencia() {
   const [error, setError]     = useState(null)
   const [filtro, setFiltro]   = useState('todos')
   const [search, setSearch]   = useState('')
+  const [trabajadores, setTrabajadores] = useState([])
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaLocalISO())
 
-  useEffect(() => { fetchMarcas() }, [])
+  useEffect(() => {
+    fetchMarcas()
+    cargarTrabajadores()
+  }, [])
+
+  async function cargarTrabajadores() {
+    try {
+      setTrabajadores(await listarTrabajadores())
+    } catch (err) {
+      console.error('Error al cargar trabajadores:', err)
+    }
+  }
 
   async function fetchMarcas() {
     try {
@@ -74,10 +92,23 @@ function Asistencia() {
     }
   }
 
-  const registros = useMemo(() => procesarMarcas(marcas), [marcas])
+  const registros = useMemo(() => {
+    const nombresPorTrabajador = new Map(trabajadores.map((trabajador) => [
+      trabajador.id,
+      `${trabajador.nombre} ${trabajador.apellido}`.trim(),
+    ]))
+    return procesarMarcas(marcas, fechaSeleccionada).map((registro) => ({
+      ...registro,
+      trabajadorNombre: nombresPorTrabajador.get(registro.trabajadorId) ?? 'Trabajador sin ficha',
+    }))
+  }, [marcas, trabajadores, fechaSeleccionada])
+
+  const hoy = fechaLocalISO()
+  const ayer = fechaLocalISO(new Date(Date.now() - 86_400_000))
 
   const filtrados = registros.filter((r) => {
-    const matchSearch = r.trabajadorId.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = r.trabajadorNombre.toLowerCase().includes(search.toLowerCase()) ||
+      r.trabajadorId.toLowerCase().includes(search.toLowerCase())
     const matchFiltro = filtro === 'todos' || r.estado === filtro
     return matchSearch && matchFiltro
   })
@@ -98,7 +129,7 @@ function Asistencia() {
           <div className="asist-top">
             <div className="asist-date-card">
               <span className="asist-date-card__label">Registros del día</span>
-              <strong className="asist-date-card__date">{hoyStr}</strong>
+              <strong className="asist-date-card__date">{textoFecha(fechaSeleccionada)}</strong>
             </div>
             <div className="asist-stats">
               <div className="asist-stat">
@@ -122,19 +153,44 @@ function Asistencia() {
 
           <div className="asist-progress-bar" role="progressbar" aria-valuenow={porcentaje} aria-valuemin={0} aria-valuemax={100}>
             <div className="asist-progress-bar__fill" style={{ width: `${porcentaje}%` }} />
-            <span>{porcentaje}% de asistencia hoy</span>
+            <span>{porcentaje}% de asistencia para la fecha seleccionada</span>
           </div>
         </>
       )}
 
       {/* Toolbar */}
       <div className="asist-toolbar">
+        <div className="asist-date-filter" aria-label="Filtrar asistencia por fecha">
+          <button
+            type="button"
+            className={`asist-date-filter__quick${fechaSeleccionada === hoy ? ' asist-date-filter__quick--active' : ''}`}
+            onClick={() => setFechaSeleccionada(hoy)}
+          >
+            Hoy
+          </button>
+          <button
+            type="button"
+            className={`asist-date-filter__quick${fechaSeleccionada === ayer ? ' asist-date-filter__quick--active' : ''}`}
+            onClick={() => setFechaSeleccionada(ayer)}
+          >
+            Ayer
+          </button>
+          <label className="asist-date-filter__input">
+            <span>Fecha</span>
+            <input
+              type="date"
+              value={fechaSeleccionada}
+              max={hoy}
+              onChange={(event) => setFechaSeleccionada(event.target.value)}
+            />
+          </label>
+        </div>
         <div className="asist-search">
           <span aria-hidden="true">⌕</span>
           <input
             id="asistencia-search"
             type="text"
-            placeholder="Buscar por ID trabajador…"
+            placeholder="Buscar por trabajador…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -178,7 +234,7 @@ function Asistencia() {
 
       {!loading && !error && registros.length === 0 && (
         <div className="trab-state">
-          <span>No hay marcas de asistencia registradas para hoy.</span>
+          <span>No hay marcas de asistencia registradas para la fecha seleccionada.</span>
         </div>
       )}
 
@@ -188,7 +244,7 @@ function Asistencia() {
           <table className="asist-table">
             <thead>
               <tr>
-                <th>ID Trabajador</th>
+                <th>Trabajador</th>
                 <th>Entrada</th>
                 <th>Salida</th>
                 <th>Horas trabajadas</th>
@@ -199,7 +255,7 @@ function Asistencia() {
             <tbody>
               {filtrados.map((r) => (
                 <tr key={r.trabajadorId}>
-                  <td className="asist-table__name">{r.trabajadorId}</td>
+                  <td className="asist-table__name">{r.trabajadorNombre}</td>
                   <td className="asist-table__time">{r.entrada ?? '—'}</td>
                   <td className="asist-table__time">{r.salida ?? '—'}</td>
                   <td>{r.horas}</td>
@@ -209,8 +265,8 @@ function Asistencia() {
                     </span>
                   </td>
                   <td>
-                    <button type="button" className="asist-action-btn">
-                      Ver historial
+                    <button type="button" className="asist-action-btn" aria-label={`Ver historial de ${r.trabajadorNombre}`}>
+                      Historial
                     </button>
                   </td>
                 </tr>

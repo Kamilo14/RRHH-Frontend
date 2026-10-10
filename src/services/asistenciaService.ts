@@ -14,8 +14,9 @@
  */
 
 import { apiRequest, apiPost, apiPut, type ApiResponse } from './httpClient'
+import { API_BASE } from './apiConfig'
 
-const BASE = import.meta.env.VITE_API_ASISTENCIA as string
+const BASE = API_BASE
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -63,30 +64,30 @@ export interface AsistenciaResumenResponse {
  * Agrupa entrada/salida por trabajadorId para construir el registro diario.
  */
 export async function listarMarcasAsistencia(): Promise<MarcaAsistenciaResponse[]> {
-  const res = await apiRequest<ApiResponse<MarcaAsistenciaResponse[]>>(
+  const res = await apiRequest<ApiResponse<MarcaAsistenciaApiResponse[]>>(
     `${BASE}/marcas-asistencia`
   )
-  return res.datos
+  return res.datos.map(normalizarMarca)
 }
 
 /**
  * Lista las marcas de un trabajador específico.
  */
 export async function listarMarcasPorTrabajador(trabajadorId: string): Promise<MarcaAsistenciaResponse[]> {
-  const res = await apiRequest<ApiResponse<MarcaAsistenciaResponse[]>>(
+  const res = await apiRequest<ApiResponse<MarcaAsistenciaApiResponse[]>>(
     `${BASE}/asistencia/trabajador/${trabajadorId}`
   )
-  return res.datos
+  return res.datos.map(normalizarMarca)
 }
 
 /**
  * Obtiene la marca de hoy de un trabajador.
  */
 export async function obtenerMarcaHoy(trabajadorId: string): Promise<MarcaAsistenciaResponse | null> {
-  const res = await apiRequest<ApiResponse<MarcaAsistenciaResponse>>(
+  const res = await apiRequest<ApiResponse<MarcaAsistenciaApiResponse>>(
     `${BASE}/asistencia/trabajador/${trabajadorId}/hoy`
   )
-  return res.datos
+  return normalizarMarca(res.datos)
 }
 
 /**
@@ -97,26 +98,33 @@ export async function listarMarcasPorPeriodo(
   fechaInicio: string,
   fechaFin: string
 ): Promise<MarcaAsistenciaResponse[]> {
-  const res = await apiRequest<ApiResponse<MarcaAsistenciaResponse[]>>(
+  const res = await apiRequest<ApiResponse<MarcaAsistenciaApiResponse[]>>(
     `${BASE}/asistencia/trabajador/${trabajadorId}/periodo?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
   )
-  return res.datos
+  return res.datos.map(normalizarMarca)
 }
 
 /**
  * Registra una nueva marca de asistencia (check-in/check-out).
  */
 export async function registrarMarca(data: RegistrarMarcaRequest): Promise<MarcaAsistenciaResponse> {
-  const res = await apiPost<ApiResponse<MarcaAsistenciaResponse>>(`${BASE}/asistencia/registro`, data)
-  return res.datos
+  const res = await apiPost<ApiResponse<MarcaAsistenciaApiResponse>>(`${BASE}/asistencia/registro`, {
+    trabajador_id: data.trabajadorId,
+    tipo: data.tipo,
+    origen: data.origen,
+  })
+  return normalizarMarca(res.datos)
 }
 
 /**
  * Edita manualmente una marca de asistencia (solo RRHH).
  */
 export async function editarMarca(marcaId: string, data: EditarMarcaRequest): Promise<MarcaAsistenciaResponse> {
-  const res = await apiPut<ApiResponse<MarcaAsistenciaResponse>>(`${BASE}/asistencia/${marcaId}/editar`, data)
-  return res.datos
+  const res = await apiPut<ApiResponse<MarcaAsistenciaApiResponse>>(`${BASE}/asistencia/${marcaId}/editar`, {
+    fecha_hora: data.fechaHora,
+    motivo: data.motivo,
+  })
+  return normalizarMarca(res.datos)
 }
 
 /**
@@ -138,4 +146,32 @@ export async function obtenerResumenAsistencia(
  */
 export async function statusAsistencia(): Promise<ServiceStatus> {
   return apiRequest<ServiceStatus>(`${BASE}/asistencia/status`, { public: true })
+}
+
+interface MarcaAsistenciaApiResponse {
+  id: string
+  tenant_id?: string
+  tenantId?: string
+  trabajador_id?: string
+  trabajadorId?: string
+  tipo: TipoMarca
+  fecha_hora?: string
+  fechaHora?: string
+  origen: string
+  activo: boolean
+  creado_en?: string
+  creadoEn?: string
+}
+
+function normalizarMarca(marca: MarcaAsistenciaApiResponse): MarcaAsistenciaResponse {
+  return {
+    id: marca.id,
+    tenantId: marca.tenantId ?? marca.tenant_id ?? '',
+    trabajadorId: marca.trabajadorId ?? marca.trabajador_id ?? '',
+    tipo: marca.tipo,
+    fechaHora: marca.fechaHora ?? marca.fecha_hora ?? '',
+    origen: marca.origen,
+    activo: marca.activo,
+    creadoEn: marca.creadoEn ?? marca.creado_en ?? '',
+  }
 }

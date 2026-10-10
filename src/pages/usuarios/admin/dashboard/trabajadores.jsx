@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react'
-import { listarTrabajadores, desactivarTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
+import { useAuth } from '../../../../context/AuthContext'
+import { listarTrabajadores, desactivarTrabajador, actualizarTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
+import { listarUsuarios } from '../../../../services/identityService'
 import '../../../../styles/trabajadores.css'
 import '../../../../styles/modal.css'
 
 function Trabajadores() {
+  const { user } = useAuth()
   const [trabajadores, setTrabajadores] = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
   const [search, setSearch]           = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [showForm, setShowForm]       = useState(false)
+  const [editingTrabajadorId, setEditingTrabajadorId] = useState(null)
   const [departamentos, setDepartamentos] = useState([])
   const [cargos, setCargos]           = useState([])
   const [formError, setFormError]     = useState('')
   const [formLoading, setFormLoading] = useState(false)
   const [cuentaPendiente, setCuentaPendiente] = useState(null)
+  const [rolCuentaPendiente, setRolCuentaPendiente] = useState('TRABAJADOR')
   const [cuentaEnProceso, setCuentaEnProceso] = useState(null)
   const [cuentaMensaje, setCuentaMensaje] = useState('')
 
@@ -22,7 +27,7 @@ function Trabajadores() {
     setCuentaEnProceso(trabajador.id)
     setCuentaMensaje('')
     try {
-      await crearTrabajadorConCuenta({}, trabajador)
+      await crearTrabajadorConCuenta({ rol: trabajador.rol ?? rolCuentaPendiente }, trabajador)
       setCuentaMensaje(`Cuenta de ${trabajador.email} registrada en Cognito.`)
     } catch (err) {
       setCuentaMensaje(err.message)
@@ -40,20 +45,51 @@ function Trabajadores() {
     departamentoId: '',
     cargoId: '',
     jefaturaId: '',
+    rol: 'TRABAJADOR',
   })
 
   useEffect(() => {
-    fetchTrabajadores()
-    cargarCatalogos()
-  }, [])
+    cargarDatos()
+  }, [user?.tenantId, user?.trabajadorId])
 
-  async function cargarCatalogos() {
+  async function cargarDatos() {
     try {
-      const [deps, car] = await Promise.all([listarDepartamentos(), listarCargos()])
-      setDepartamentos(deps)
-      setCargos(car)
+      const [trabajadoresData, deps, car, usuarios] = await Promise.all([
+        listarTrabajadores(),
+        listarDepartamentos(),
+        listarCargos(),
+        listarUsuarios(),
+      ])
+      const tenantId = user?.tenantId
+      const tenantDeps = deps.filter((departamento) => !tenantId || departamento.tenantId === tenantId)
+      const tenantCargos = car.filter((cargo) => !tenantId || cargo.tenantId === tenantId)
+      const rolPorTrabajador = new Map(
+        usuarios
+          .filter((usuario) => usuario.trabajadorId)
+          .map((usuario) => [usuario.trabajadorId, usuario.rol])
+      )
+      const rolPorEmail = new Map(usuarios.map((usuario) => [usuario.email.toLowerCase(), usuario.rol]))
+      setTrabajadores(trabajadoresData.map((trabajador) => ({
+        ...trabajador,
+        rol: rolPorTrabajador.get(trabajador.id)
+          ?? rolPorEmail.get(trabajador.email.toLowerCase())
+          ?? trabajador.rol,
+      })))
+      setDepartamentos(tenantDeps)
+      setCargos(tenantCargos)
+      setFormData((current) => {
+        if (current.departamentoId || !user?.trabajadorId) return current
+        const admin = trabajadoresData.find((trabajador) => trabajador.id === user.trabajadorId)
+        const departamentoId = admin?.departamentoId
+        const departamento = tenantDeps.find((item) => item.id === departamentoId)
+        return departamento
+          ? { ...current, departamentoId: departamento.nombre }
+          : current
+      })
     } catch (err) {
-      console.error('Error al cargar catálogos:', err)
+      setError(err.message ?? 'Error al cargar trabajadores y catálogos')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -86,9 +122,17 @@ function Trabajadores() {
     setFormLoading(true)
 
     try {
-      await crearTrabajadorConCuenta(formData, cuentaPendiente)
+      if (editingTrabajadorId) {
+        const actualizado = await actualizarTrabajador(editingTrabajadorId, formData)
+        setTrabajadores((prev) => prev.map((trabajador) => (
+          trabajador.id === actualizado.id ? actualizado : trabajador
+        )))
+      } else {
+        await crearTrabajadorConCuenta(formData, cuentaPendiente)
+      }
       setCuentaPendiente(null)
       setShowForm(false)
+      setEditingTrabajadorId(null)
       setFormData({
         nombre: '',
         apellido: '',
@@ -98,10 +142,14 @@ function Trabajadores() {
         departamentoId: '',
         cargoId: '',
         jefaturaId: '',
+        rol: 'TRABAJADOR',
       })
-      fetchTrabajadores()
+      cargarDatos()
     } catch (err) {
-      if (err instanceof CuentaPendienteError) setCuentaPendiente(err.trabajador)
+      if (err instanceof CuentaPendienteError) {
+        setCuentaPendiente(err.trabajador)
+        setRolCuentaPendiente(err.rol)
+      }
       setFormError(err.message || 'Error al crear trabajador')
     } finally {
       setFormLoading(false)
@@ -112,6 +160,7 @@ function Trabajadores() {
     if (cuentaPendiente) fetchTrabajadores()
     setCuentaPendiente(null)
     setShowForm(false)
+    setEditingTrabajadorId(null)
     setFormData({
       nombre: '',
       apellido: '',
@@ -121,8 +170,27 @@ function Trabajadores() {
       departamentoId: '',
       cargoId: '',
       jefaturaId: '',
+      rol: 'TRABAJADOR',
     })
     setFormError('')
+  }
+
+  function handleEditarTrabajador(trabajador) {
+    setCuentaPendiente(null)
+    setFormError('')
+    setEditingTrabajadorId(trabajador.id)
+    setFormData({
+      nombre: trabajador.nombre ?? '',
+      apellido: trabajador.apellido ?? '',
+      rutTrabajador: trabajador.rutTrabajador ?? '',
+      email: trabajador.email ?? '',
+      telefono: trabajador.telefono ?? '',
+      departamentoId: departamentos.find((departamento) => departamento.id === trabajador.departamentoId)?.nombre ?? '',
+      cargoId: cargos.find((cargo) => cargo.id === trabajador.cargoId)?.nombre ?? '',
+      jefaturaId: trabajador.jefaturaId ?? '',
+      rol: trabajador.rol ?? 'TRABAJADOR',
+    })
+    setShowForm(true)
   }
 
   const filtrados = trabajadores.filter((t) => {
@@ -138,6 +206,19 @@ function Trabajadores() {
 
   const initials = (t) =>
     `${t.nombre?.[0] ?? ''}${t.apellido?.[0] ?? ''}`.toUpperCase()
+
+  const rolLabel = (rol) => ({
+    ADMIN_RRHH: 'Admin de RRHH',
+    ROLE_ADMIN_RRHH: 'Admin de RRHH',
+    JEFATURA: 'Jefatura',
+    ROLE_JEFATURA: 'Jefatura',
+    TRABAJADOR: 'Trabajador',
+    ROLE_TRABAJADOR: 'Trabajador',
+    SUPERADMIN: 'SuperAdmin',
+    ROLE_SUPERADMIN: 'SuperAdmin',
+    OperadorSaaS: 'Operador SaaS',
+    ROLE_OPERADOR_SAAS: 'Operador SaaS',
+  }[rol] ?? rol ?? 'Sin rol asignado')
 
   return (
     <div className="trab-page">
@@ -181,13 +262,22 @@ function Trabajadores() {
       {showForm && (
         <div className="form-card">
           <div className="form-card-header">
-            <h3>Nuevo Trabajador</h3>
+            <h3>{editingTrabajadorId ? 'Editar trabajador' : 'Nuevo trabajador'}</h3>
             <button type="button" onClick={handleCancelForm} className="btn-close">×</button>
           </div>
           <form onSubmit={handleCrearTrabajador} className="form-card-body">
             {formError && <div className="form-error">{formError}</div>}
 
             <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="rol">Rol de acceso *</label>
+                <select id="rol" required value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })}>
+                  <option value="TRABAJADOR">Trabajador</option>
+                  <option value="JEFATURA">Jefatura</option>
+                  <option value="ADMIN_RRHH">Admin de RRHH</option>
+                </select>
+                <small>SUPERADMIN es exclusivo del propietario de la plataforma.</small>
+              </div>
               <div className="form-group">
                 <label htmlFor="nombre">Nombre *</label>
                 <input
@@ -253,32 +343,34 @@ function Trabajadores() {
 
               <div className="form-group">
                 <label htmlFor="departamento">Departamento (opcional)</label>
-                <select
+                <input
                   id="departamento"
+                  type="text"
+                  list="departamentos-opciones"
                   value={formData.departamentoId}
                   onChange={(e) => setFormData({ ...formData, departamentoId: e.target.value })}
-                >
-                  <option value="">Seleccionar departamento...</option>
-                  {departamentos.map((d) => (
-                    <option key={d.id} value={d.id}>{d.nombre}</option>
-                  ))}
-                </select>
+                  placeholder="Ej. Recursos Humanos"
+                />
+                <datalist id="departamentos-opciones">
+                  {departamentos.map((d) => <option key={d.id} value={d.nombre} />)}
+                </datalist>
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="cargo">Cargo (opcional)</label>
-                <select
+                <input
                   id="cargo"
+                  type="text"
+                  list="cargos-opciones"
                   value={formData.cargoId}
                   onChange={(e) => setFormData({ ...formData, cargoId: e.target.value })}
-                >
-                  <option value="">Seleccionar cargo...</option>
-                  {cargos.map((c) => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
+                  placeholder="Ej. Analista de RRHH"
+                />
+                <datalist id="cargos-opciones">
+                  {cargos.map((c) => <option key={c.id} value={c.nombre} />)}
+                </datalist>
               </div>
 
               <div className="form-group">
@@ -298,7 +390,7 @@ function Trabajadores() {
                 Cancelar
               </button>
               <button type="submit" disabled={formLoading} className="btn-primary">
-                {formLoading ? 'Guardando...' : 'Guardar trabajador'}
+                {formLoading ? 'Guardando...' : editingTrabajadorId ? 'Guardar cambios' : 'Guardar trabajador'}
               </button>
             </div>
           </form>
@@ -337,6 +429,7 @@ function Trabajadores() {
                   <th>Email</th>
                   <th>Departamento</th>
                   <th>Cargo</th>
+                  <th>Rol</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
@@ -344,7 +437,7 @@ function Trabajadores() {
               <tbody>
                 {filtrados.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="trab-table__empty">
+                    <td colSpan={8} className="trab-table__empty">
                       No se encontraron trabajadores con ese criterio.
                     </td>
                   </tr>
@@ -359,8 +452,9 @@ function Trabajadores() {
                       </td>
                       <td className="trab-table__rut">{t.rutTrabajador ?? '—'}</td>
                       <td>{t.email}</td>
-                      <td>{t.departamentoId ?? '—'}</td>
-                      <td>{t.cargoId ?? '—'}</td>
+                      <td>{departamentos.find((departamento) => departamento.id === t.departamentoId)?.nombre ?? '—'}</td>
+                      <td>{cargos.find((cargo) => cargo.id === t.cargoId)?.nombre ?? '—'}</td>
+                      <td>{rolLabel(t.rol)}</td>
                       <td>
                         <span className={`trab-badge trab-badge--${t.activo ? 'activo' : 'inactivo'}`}>
                           {t.activo ? 'Activo' : 'Inactivo'}
@@ -369,9 +463,9 @@ function Trabajadores() {
                       <td>
                         <div className="trab-table__actions">
                           {t.activo && <button type="button" className="btn-secondary" disabled={cuentaEnProceso !== null} onClick={() => completarCuenta(t)}>
-                            {cuentaEnProceso === t.id ? 'Creando cuenta…' : 'Crear / reintentar cuenta'}
+                            {cuentaEnProceso === t.id ? 'Sincronizando…' : 'Sincronizar cuenta'}
                           </button>}
-                          <button type="button" className="trab-action-btn" title="Ver detalle">✎</button>
+                          <button type="button" className="trab-action-btn" title="Editar trabajador" aria-label={`Editar a ${t.nombre} ${t.apellido}`} onClick={() => handleEditarTrabajador(t)}>✎</button>
                           {t.activo && (
                             <button
                               type="button"

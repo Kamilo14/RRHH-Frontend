@@ -19,6 +19,10 @@
   margin-bottom: 31px;
 }
 
+.admin-header--configuration {
+  margin-bottom: 12px;
+}
+
 .admin-header__eyebrow {
   color: #7890a0;
   font-size: 0.76rem;
@@ -123,6 +127,10 @@
   .admin-header {
     align-items: flex-start;
     margin-bottom: 24px;
+  }
+
+  .admin-header--configuration {
+    margin-bottom: 12px;
   }
 
   .admin-header__user {

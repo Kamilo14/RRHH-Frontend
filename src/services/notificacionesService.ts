@@ -11,8 +11,9 @@
  */
 
 import { apiRequest, apiPatch, type ApiResponse } from './httpClient'
+import { API_BASE } from './apiConfig'
 
-const BASE = import.meta.env.VITE_API_NOTIFICATIONS as string
+const BASE = API_BASE
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -44,16 +45,16 @@ export interface MarcarLeidaRequest {
 
 /** Lista todas las notificaciones del usuario autenticado */
 export async function listarNotificaciones(): Promise<NotificacionResponse[]> {
-  const res = await apiRequest<ApiResponse<NotificacionResponse[]>>(`${BASE}/notificaciones`)
-  return res.datos
+  const res = await apiRequest<ApiResponse<NotificacionApiResponse[]>>(`${BASE}/notificaciones`)
+  return res.datos.map(normalizarNotificacion)
 }
 
 /** Lista las notificaciones no leídas del usuario */
 export async function listarNoLeidas(): Promise<NotificacionResponse[]> {
-  const res = await apiRequest<ApiResponse<NotificacionResponse[]>>(
+  const res = await apiRequest<ApiResponse<NotificacionApiResponse[]>>(
     `${BASE}/notificaciones/no-leidas`
   )
-  return res.datos
+  return res.datos.map(normalizarNotificacion)
 }
 
 /** Cuenta las notificaciones no leídas del usuario */
@@ -64,15 +65,42 @@ export async function contarNoLeidas(): Promise<{ count: number }> {
 
 /** Marca una notificación como leída o no leída */
 export async function marcarLeida(id: string, data: MarcarLeidaRequest): Promise<NotificacionResponse> {
-  const res = await apiPatch<ApiResponse<NotificacionResponse>>(
+  const res = await apiPatch<ApiResponse<NotificacionApiResponse>>(
     `${BASE}/notificaciones/${id}/marcar-leida`,
     data
   )
-  return res.datos
+  return normalizarNotificacion(res.datos)
 }
 
 /** Estado del microservicio de notificaciones */
 export async function statusNotificaciones(): Promise<ServiceStatusResponse> {
   const res = await apiRequest<ApiResponse<ServiceStatusResponse>>(`${BASE}/notificaciones/status`)
   return res.datos
+}
+
+interface NotificacionApiResponse {
+  id: string
+  tenant_id?: string
+  tenantId?: string
+  destinatario_id?: string
+  destinatarioId?: string
+  canal: string
+  asunto: string
+  cuerpo: string
+  estado: string
+  creado_en?: string
+  creadoEn?: string
+}
+
+function normalizarNotificacion(notificacion: NotificacionApiResponse): NotificacionResponse {
+  return {
+    id: notificacion.id,
+    tenantId: notificacion.tenantId ?? notificacion.tenant_id ?? '',
+    destinatarioId: notificacion.destinatarioId ?? notificacion.destinatario_id ?? '',
+    canal: notificacion.canal,
+    asunto: notificacion.asunto,
+    cuerpo: notificacion.cuerpo,
+    estado: notificacion.estado,
+    creadoEn: notificacion.creadoEn ?? notificacion.creado_en ?? '',
+  }
 }
