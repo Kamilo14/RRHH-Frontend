@@ -3,7 +3,7 @@ import { AuthProvider as OidcProvider } from 'react-oidc-context'
 import { AuthProvider } from './context/AuthContext'
 import { TenantProvider } from './context/TenantContext'
 import { oidcConfig } from './config/oidcConfig'
-// import ProtectedRoute from './routes/ProtectedRoute'
+import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import Login from './pages/usuarios/login'
 import Dashboard from './pages/usuarios/admin/dashboard/Dashboard'
 
@@ -18,11 +18,12 @@ function App() {
               <Route
                 path="/admin/dashboard"
                 element={
-                  // <ProtectedRoute>
+                  <ProtectedRoute allowedRoles={['OperadorSaaS', 'SuperAdmin', 'Admin de RRHH', 'Jefatura', 'Trabajador']}>
                     <Dashboard />
-                  // </ProtectedRoute>
+                  </ProtectedRoute>
                 }
               />
+              <Route path="/unauthorized" element={<Navigate to="/login" replace />} />
               <Route path="/" element={<Navigate to="/login" replace />} />
             </Routes>
           </TenantProvider>

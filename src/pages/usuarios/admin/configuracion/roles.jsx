@@ -23,7 +23,11 @@ function Roles({ onBack }) {
   })
 
   const esAdminRrhh = ['Admin de RRHH', 'ADMIN_RRHH', 'ROLE_ADMIN_RRHH'].includes(user?.role)
-  const rolesVisibles = esAdminRrhh ? roles.filter((rol) => rol.id !== 'superadmin') : roles
+  const esSuperAdmin = ['SuperAdmin', 'SUPERADMIN', 'ROLE_SUPERADMIN'].includes(user?.role)
+  const rolesVisibles = roles.filter((rol) => {
+    if (rol.id === 'operador-saas') return esSuperAdmin
+    return !(esAdminRrhh && rol.id === 'superadmin')
+  })
 
   useEffect(() => {
     fetchRoles()
@@ -97,7 +101,7 @@ function Roles({ onBack }) {
           <ConfiguracionBackButton onBack={onBack} />
           <h1>Gestión de Roles</h1>
         </div>
-        <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
+        <button type="button" className="btn-primary config-header__action" onClick={() => setShowForm(true)}>
           <span aria-hidden="true">＋</span> Nuevo rol
         </button>
       </header>

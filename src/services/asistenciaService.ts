@@ -13,7 +13,7 @@
  *  GET /api/v1/asistencia/status                    → estado del servicio
  */
 
-import { apiRequest, apiPost, apiPut, type ApiResponse } from './httpClient'
+import { apiRequest, apiPost, apiPut, apiPatch, type ApiResponse } from './httpClient'
 import { API_BASE } from './apiConfig'
 
 const BASE = API_BASE
@@ -55,6 +55,33 @@ export interface AsistenciaResumenResponse {
   totalEntradas: number
   totalSalidas: number
   porcentajeAsistencia: number
+}
+
+export type TipoHoraExtra = 'NORMAL' | 'FIN_DE_SEMANA' | 'FESTIVO' | 'TURNO_ESPECIAL'
+export type EstadoHoraExtra = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'INCORPORADA_EN_LIQUIDACION'
+
+export interface HoraExtraResponse {
+  id: string
+  trabajadorId: string
+  fecha: string
+  periodo: string
+  tipo: TipoHoraExtra
+  cantidadHoras: number
+  valorHora: number
+  recargoPorcentaje: number
+  montoTotal: number
+  motivo: string
+  estado: EstadoHoraExtra
+}
+
+export interface CrearHoraExtraRequest {
+  trabajadorId: string
+  fecha: string
+  tipo: TipoHoraExtra
+  cantidadHoras: number
+  valorHora: number
+  recargoPorcentaje?: number
+  motivo: string
 }
 
 // ─── Funciones ────────────────────────────────────────────────────────────────
@@ -146,6 +173,36 @@ export async function obtenerResumenAsistencia(
  */
 export async function statusAsistencia(): Promise<ServiceStatus> {
   return apiRequest<ServiceStatus>(`${BASE}/asistencia/status`, { public: true })
+}
+
+export async function listarHorasExtra(periodo: string, trabajadorId?: string): Promise<HoraExtraResponse[]> {
+  const params = new URLSearchParams({ periodo })
+  if (trabajadorId) params.set('trabajador_id', trabajadorId)
+  const res = await apiRequest<ApiResponse<HoraExtraResponse[]>>(`${BASE}/horas-extra?${params.toString()}`)
+  return res.datos
+}
+
+export async function crearHoraExtra(data: CrearHoraExtraRequest): Promise<HoraExtraResponse> {
+  const res = await apiPost<ApiResponse<HoraExtraResponse>>(`${BASE}/horas-extra`, {
+    trabajador_id: data.trabajadorId,
+    fecha: data.fecha,
+    tipo: data.tipo,
+    cantidad_horas: data.cantidadHoras,
+    valor_hora: data.valorHora,
+    recargo_porcentaje: data.recargoPorcentaje ?? 0,
+    motivo: data.motivo,
+  })
+  return res.datos
+}
+
+export async function aprobarHoraExtra(id: string): Promise<HoraExtraResponse> {
+  const res = await apiPatch<ApiResponse<HoraExtraResponse>>(`${BASE}/horas-extra/${id}/aprobar`, {})
+  return res.datos
+}
+
+export async function rechazarHoraExtra(id: string): Promise<HoraExtraResponse> {
+  const res = await apiPatch<ApiResponse<HoraExtraResponse>>(`${BASE}/horas-extra/${id}/rechazar`, {})
+  return res.datos
 }
 
 interface MarcaAsistenciaApiResponse {

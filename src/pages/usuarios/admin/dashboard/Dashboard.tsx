@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../../context/AuthContext'
+import type { MeResponse } from '../../../../services/identityService'
 import { getToken } from '../../../../services/httpClient'
 import AdminSidebar, { type AdminSection } from '../../../../components/AdminSidebar'
 import Trabajadores from './trabajadores'
@@ -9,6 +10,7 @@ import Inasistencia from './inasistencia'
 import Notificaciones from './notificaciones'
 import Roles from '../configuracion/roles'
 import MiCuenta from '../configuracion/miCuenta'
+import Preferencias from '../configuracion/preferencias'
 import Configuracion from '../configuracion/Configuracion'
 import '../../../../styles/admin.css'
 import '../../../../styles/Dashboard.css'
@@ -16,6 +18,7 @@ import { listarTrabajadores, type TrabajadorResponse } from '../../../../service
 import { listarContratos, type ContratoResponse } from '../../../../services/contratosService'
 import { listarMarcasAsistencia, type MarcaAsistenciaResponse } from '../../../../services/asistenciaService'
 import { listarSolicitudesAusencia, type SolicitudAusenciaResponse } from '../../../../services/ausenciasService'
+import { canAccessSection } from '../../../../security/accessControl'
 
 const sectionTitles: Record<AdminSection, string> = {
   resumen: 'Resumen general',
@@ -27,6 +30,11 @@ const sectionTitles: Record<AdminSection, string> = {
   configuracion: 'Configuración',
   'configuracion-cuenta': 'Configuración / Mi cuenta',
   'configuracion-roles': 'Configuración / Roles',
+  seguridad: 'Configuración / Seguridad',
+  facturacion: 'Configuración / Planes y facturación',
+  aspecto: 'Configuración / Aspecto',
+  idioma: 'Configuración / Idioma y región',
+  accesibilidad: 'Configuración / Accesibilidad',
 }
 
 type CognitoClaims = {
@@ -54,18 +62,41 @@ function getCognitoDisplayName(): string | null {
   }
 }
 
+function getProfileDisplayName(user: MeResponse | null): string | null {
+  if (!user?.userId) return null
+
+  try {
+    const profile = JSON.parse(localStorage.getItem(`rrhh_perfil_${user.userId}`) ?? '{}') as { nombre?: unknown }
+    return typeof profile.nombre === 'string' && profile.nombre.trim() ? profile.nombre.trim() : null
+  } catch {
+    return null
+  }
+}
+
+function getDisplayName(user: MeResponse | null, fallback: string): string {
+  return getProfileDisplayName(user) || user?.nombre || getCognitoDisplayName() || user?.email || fallback
+}
+
 function Dashboard() {
   const [activeSection, setActiveSection] = useState<AdminSection>('resumen')
   const [notificationRefreshKey, setNotificationRefreshKey] = useState(0)
   const { user } = useAuth()
   const isConfigurationSection = activeSection.startsWith('configuracion')
-  const displayName = user?.nombre || getCognitoDisplayName() || user?.email || 'Usuario'
+    || ['seguridad', 'facturacion', 'aspecto', 'idioma', 'accesibilidad'].includes(activeSection)
+  const displayName = getDisplayName(user, 'Usuario')
   const initials = displayName
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('')
+
+  useEffect(() => {
+    if (canAccessSection(user?.role, activeSection)) return
+    const fallback = (['resumen', 'asistencia', 'ausencias', 'notificaciones', 'configuracion'] as AdminSection[])
+      .find((section) => canAccessSection(user?.role, section))
+    if (fallback) setActiveSection(fallback)
+  }, [activeSection, user?.role])
 
   const renderSection = () => {
     switch (activeSection) {
@@ -87,6 +118,12 @@ function Dashboard() {
         return <Roles onBack={() => setActiveSection('configuracion')} />
       case 'configuracion-cuenta':
         return <MiCuenta onBack={() => setActiveSection('configuracion')} />
+      case 'seguridad':
+      case 'facturacion':
+      case 'aspecto':
+      case 'idioma':
+      case 'accesibilidad':
+        return <Preferencias section={activeSection} onBack={() => setActiveSection('configuracion')} />
       default:
         return null
     }
@@ -96,20 +133,22 @@ function Dashboard() {
     <div className="admin-shell">
       <AdminSidebar activeSection={activeSection} onSectionChange={setActiveSection} notificationRefreshKey={notificationRefreshKey} />
       <main className="admin-main">
-        <header className={`admin-header${isConfigurationSection ? ' admin-header--configuration' : ''}`}>
-          <div>
-            <span className="admin-header__eyebrow">Administración / {sectionTitles[activeSection]}</span>
-            {!isConfigurationSection && <h1>{sectionTitles[activeSection]}</h1>}
-          </div>
-          <div className="admin-header__user">
-            <div className="admin-header__avatar">{initials}</div>
+        {!isConfigurationSection && activeSection !== 'ausencias' && (
+          <header className="admin-header">
             <div>
-              <strong>{displayName}</strong>
-              <span>{user?.role || 'Usuario'}</span>
+              <span className="admin-header__eyebrow">Administración / {sectionTitles[activeSection]}</span>
+              <h1>{sectionTitles[activeSection]}</h1>
             </div>
-            <span className="admin-header__chevron">⌄</span>
-          </div>
-        </header>
+            <div className="admin-header__user">
+              <div className="admin-header__avatar">{initials}</div>
+              <div>
+                <strong>{displayName}</strong>
+                <span>{user?.role || 'Usuario'}</span>
+              </div>
+              <span className="admin-header__chevron">⌄</span>
+            </div>
+          </header>
+        )}
 
         {renderSection()}
       </main>
@@ -129,7 +168,7 @@ function DashboardOverview({ onSectionChange }: DashboardOverviewProps) {
   const [ausencias, setAusencias] = useState<SolicitudAusenciaResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const displayName = user?.nombre || getCognitoDisplayName() || user?.email || 'usuario'
+  const displayName = getDisplayName(user, 'usuario')
   const today = new Intl.DateTimeFormat('es-CL', {
     weekday: 'long',
     day: 'numeric',

@@ -31,6 +31,8 @@ export interface SolicitudAusenciaResponse {
   fechaFin: string      // LocalDate → "YYYY-MM-DD"
   estado: EstadoSolicitud
   motivo: string | null
+  motivoRechazo?: string | null
+  fechaEvaluacion?: string | null
   creadoEn: string      // Instant → ISO-8601
 }
 
@@ -49,6 +51,12 @@ export interface SolicitarAusenciaRequest {
 }
 
 export interface RechazarAusenciaRequest {
+  motivo: string
+}
+
+export interface CrearSolicitudPropiaRequest {
+  tipo: string
+  fecha: string
   motivo: string
 }
 
@@ -80,6 +88,12 @@ export async function obtenerSolicitudAusencia(id: string): Promise<SolicitudAus
 export async function misSolicitudes(): Promise<SolicitudAusenciaResponse[]> {
   const res = await apiRequest<ApiResponse<SolicitudAusenciaApiResponse[]>>(`${BASE}/ausencias/mis-solicitudes`)
   return res.datos.map(normalizarSolicitud)
+}
+
+/** Crea una solicitud para el trabajador autenticado. */
+export async function crearSolicitudPropia(data: CrearSolicitudPropiaRequest): Promise<SolicitudAusenciaResponse> {
+  const res = await apiPost<ApiResponse<SolicitudAusenciaApiResponse>>(`${BASE}/solicitudes-ausencia`, data)
+  return normalizarSolicitud(res.datos)
 }
 
 /** Crea una nueva solicitud de ausencia */
@@ -127,6 +141,10 @@ interface SolicitudAusenciaApiResponse {
   fechaFin?: string
   estado: EstadoSolicitud
   motivo: string | null
+  motivo_rechazo?: string | null
+  motivoRechazo?: string | null
+  fecha_evaluacion?: string | null
+  fechaEvaluacion?: string | null
   creado_en?: string
   creadoEn?: string
 }
@@ -141,6 +159,8 @@ function normalizarSolicitud(solicitud: SolicitudAusenciaApiResponse): Solicitud
     fechaFin: solicitud.fechaFin ?? solicitud.fecha_fin ?? '',
     estado: solicitud.estado,
     motivo: solicitud.motivo,
+    motivoRechazo: solicitud.motivoRechazo ?? solicitud.motivo_rechazo ?? null,
+    fechaEvaluacion: solicitud.fechaEvaluacion ?? solicitud.fecha_evaluacion ?? null,
     creadoEn: solicitud.creadoEn ?? solicitud.creado_en ?? '',
   }
 }

@@ -1,5 +1,7 @@
 import './configuracion.css'
 import ConfiguracionBackButton from './ConfiguracionBackButton'
+import { useAuth } from '../../../../context/AuthContext'
+import { canAccessSection } from '../../../../security/accessControl'
 
 const sections = [
   {
@@ -22,8 +24,9 @@ const sections = [
 ]
 
 function Configuracion({ onSectionChange, onBack }) {
+  const { user } = useAuth()
   function openSection(id) {
-    if (id === 'configuracion-cuenta' || id === 'configuracion-roles') {
+    if (['configuracion-cuenta', 'configuracion-roles', 'seguridad', 'facturacion', 'aspecto', 'idioma', 'accesibilidad'].includes(id)) {
       onSectionChange(id)
       return
     }
@@ -42,11 +45,14 @@ function Configuracion({ onSectionChange, onBack }) {
         </div>
       </header>
       <div className="settings-groups">
-        {sections.map((section) => (
+        {sections.map((section) => {
+          const items = section.items.filter((item) => canAccessSection(user?.role, item.id))
+          if (items.length === 0) return null
+          return (
           <section className="settings-group" key={section.title} aria-labelledby={`settings-${section.title}`}>
             <h3 id={`settings-${section.title}`}>{section.title}</h3>
             <div className="settings-list">
-              {section.items.map((item) => (
+              {items.map((item) => (
                 <button className="settings-row" type="button" key={item.id} onClick={() => openSection(item.id)}>
                   <span className="settings-row__icon" aria-hidden="true">{item.icon}</span>
                   <span className="settings-row__content">
@@ -58,7 +64,8 @@ function Configuracion({ onSectionChange, onBack }) {
               ))}
             </div>
           </section>
-        ))}
+          )
+        })}
       </div>
     </section>
   )

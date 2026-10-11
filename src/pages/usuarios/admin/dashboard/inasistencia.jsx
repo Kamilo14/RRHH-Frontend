@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { listarSolicitudesAusencia, aprobarSolicitud, rechazarSolicitud, solicitarAusencia } from '../../../../services/ausenciasService'
+import { listarSolicitudesAusencia, misSolicitudes, aprobarSolicitud, rechazarSolicitud, solicitarAusencia, crearSolicitudPropia } from '../../../../services/ausenciasService'
 import { listarTrabajadores } from '../../../../services/trabajadoresService'
+import { useAuth } from '../../../../context/AuthContext'
 import '../../../../styles/inasistencia.css'
 import '../../../../styles/modal.css'
 
@@ -23,6 +24,8 @@ function calcularDias(fechaInicio, fechaFin) {
 }
 
 function Inasistencia() {
+  const { user } = useAuth()
+  const esTrabajador = user?.role === 'Trabajador'
   const [solicitudes, setSolicitudes] = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
@@ -44,8 +47,8 @@ function Inasistencia() {
 
   useEffect(() => {
     fetchSolicitudes()
-    cargarTrabajadores()
-  }, [])
+    if (!esTrabajador) cargarTrabajadores()
+  }, [esTrabajador])
 
   async function cargarTrabajadores() {
     try {
@@ -60,7 +63,7 @@ function Inasistencia() {
     try {
       setLoading(true)
       setError(null)
-      const data = await listarSolicitudesAusencia()
+      const data = esTrabajador ? await misSolicitudes() : await listarSolicitudesAusencia()
       setSolicitudes(data)
     } catch (err) {
       setError(err.message ?? 'Error al cargar solicitudes')
@@ -96,7 +99,19 @@ function Inasistencia() {
     setFormLoading(true)
 
     try {
-      await solicitarAusencia(formData)
+      if (esTrabajador) {
+        if (formData.fechaInicio !== formData.fechaFin) {
+          setFormError('Las solicitudes personales se registran por un día. Selecciona la misma fecha de inicio y término.')
+          return
+        }
+        await crearSolicitudPropia({
+          tipo: formData.tipo,
+          fecha: formData.fechaInicio,
+          motivo: formData.motivo || '',
+        })
+      } else {
+        await solicitarAusencia(formData)
+      }
       setShowForm(false)
       setFormData({
         trabajadorId: '',
@@ -131,7 +146,9 @@ function Inasistencia() {
   ]))
   const solicitudesPresentables = solicitudes.map((solicitud) => ({
     ...solicitud,
-    trabajadorNombre: nombresPorTrabajador.get(solicitud.trabajadorId) ?? 'Trabajador sin ficha',
+    trabajadorNombre: esTrabajador
+      ? (user?.nombre || 'Mi solicitud')
+      : (nombresPorTrabajador.get(solicitud.trabajadorId) ?? 'Trabajador sin ficha'),
   }))
 
   const filtradas = solicitudesPresentables.filter((s) => {
@@ -153,6 +170,14 @@ function Inasistencia() {
 
   return (
     <div className="inas-page">
+      <div className="inas-section-heading">
+        <div>
+          <span>{esTrabajador ? 'Autogestión' : 'Administración de RRHH'}</span>
+          <h2>{esTrabajador ? 'Mis solicitudes' : 'Gestión de solicitudes'}</h2>
+          <p>{esTrabajador ? 'Consulta el estado de tus ausencias y registra una nueva solicitud.' : 'Revisa y evalúa las solicitudes de ausencia del equipo.'}</p>
+        </div>
+      </div>
+
       {/* Resumen */}
       {!loading && !error && (
         <div className="inas-summary">
@@ -176,7 +201,7 @@ function Inasistencia() {
           <input
             id="inasistencia-search"
             type="text"
-            placeholder="Buscar por trabajador o tipo…"
+            placeholder={esTrabajador ? 'Buscar por tipo…' : 'Buscar por trabajador o tipo…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -214,7 +239,7 @@ function Inasistencia() {
             {formError && <div className="form-error">{formError}</div>}
 
             <div className="form-row">
-              <div className="form-group">
+              {!esTrabajador && <div className="form-group">
                 <label htmlFor="trabajador">Trabajador *</label>
                 <select
                   id="trabajador"
@@ -229,7 +254,7 @@ function Inasistencia() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </div>}
 
               <div className="form-group">
                 <label htmlFor="tipo">Tipo de ausencia *</label>
@@ -250,25 +275,31 @@ function Inasistencia() {
 
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="fechaInicio">Fecha de inicio *</label>
+                <label htmlFor="fechaInicio">{esTrabajador ? 'Fecha *' : 'Fecha de inicio *'}</label>
                 <input
                   id="fechaInicio"
                   type="date"
                   required
                   value={formData.fechaInicio}
-                  onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    fechaInicio: e.target.value,
+                    ...(esTrabajador ? { fechaFin: e.target.value } : {}),
+                  })}
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="fechaFin">Fecha de término *</label>
+                  <label htmlFor="fechaFin">Fecha de término *</label>
                 <input
                   id="fechaFin"
                   type="date"
                   required
                   value={formData.fechaFin}
+                  disabled={esTrabajador}
                   onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
                 />
+                {esTrabajador && <small>Por ahora las solicitudes personales son por un día.</small>}
               </div>
             </div>
 
@@ -359,7 +390,11 @@ function Inasistencia() {
                     </>
                   )}
 
-                  {s.estado === 'PENDIENTE' && (
+                  {s.motivoRechazo && (
+                    <p className="inas-card__motivo"><strong>Motivo del rechazo:</strong> {s.motivoRechazo}</p>
+                  )}
+
+                  {!esTrabajador && s.estado === 'PENDIENTE' && (
                     <div className="inas-card__actions">
                       <button
                         type="button"

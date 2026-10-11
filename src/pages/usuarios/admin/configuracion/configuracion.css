@@ -141,9 +141,10 @@
 }
 
 .config-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  column-gap: 24px;
   padding: 4px 0 22px;
   border-bottom: 1px solid #dce9f1;
 }
@@ -177,6 +178,17 @@
   margin: 5px 0 0;
   color: #7890a0;
   font-size: 0.9rem;
+}
+
+/* Acción secundaria del encabezado: se mantiene al extremo derecho sin competir con el título. */
+.config-header__action {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: auto;
+  padding: 7px 11px;
+  font-size: 0.82rem;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 @media (max-width: 560px) {
@@ -872,3 +884,36 @@
   border-color: #0d4d78;
   color: white;
 }
+
+/* Preferencias de configuración */
+.config-preferences { display: grid; width: 100%; gap: 16px; }
+.config-preferences--billing { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.config-preferences--billing .config-plan { grid-column: 1 / -1; }
+.config-panel, .config-plan { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 24px; border: 1px solid #dce9f1; border-radius: 14px; background: #fff; box-shadow: 0 4px 16px rgba(18, 50, 76, 0.045); }
+.config-panel--stack { display: grid; align-items: stretch; }
+.config-panel h2, .config-plan h2 { margin: 0; color: #12324c; font-size: 1rem; }
+.config-panel p, .config-plan p { margin: 5px 0 0; color: #7890a0; font-size: .86rem; line-height: 1.45; }
+.config-plan { border-color: #cfe6f0; background: linear-gradient(120deg, #eef9fd, #fff); }
+.config-plan strong { padding: 5px 10px; border-radius: 99px; color: #166443; background: #d8f5e8; font-size: .76rem; }
+.config-switch { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; color: #426579; font-size: .82rem; }
+.config-switch input { position: absolute; opacity: 0; }
+.config-switch span { width: 42px; height: 23px; border-radius: 999px; background: #cbd9e1; cursor: pointer; transition: background 160ms ease; }
+.config-switch span::after { display: block; width: 17px; height: 17px; margin: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(18,50,76,.3); content: ''; transition: transform 160ms ease; }
+.config-switch input:checked + span { background: #147eaf; }
+.config-switch input:checked + span::after { transform: translateX(19px); }
+.config-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.config-choice { display: grid; place-items: center; min-height: 72px; padding: 10px; border: 1px solid #dce9f1; border-radius: 10px; color: #426579; background: #fbfdff; cursor: pointer; font-size: .82rem; text-align: center; }
+.config-choice input { position: absolute; opacity: 0; }
+.config-choice--selected { border-color: #147eaf; color: #0d668f; background: #eef8fc; box-shadow: 0 0 0 2px rgba(20,126,175,.1); font-weight: 700; }
+.config-select { min-width: 190px; padding: 10px 12px; border: 1px solid #d1dfe7; border-radius: 8px; color: #12324c; background: #fff; font: inherit; font-size: .86rem; }
+.config-inline-message { padding: 10px 12px; border-radius: 8px; color: #426579 !important; background: #eef8fc; }
+.config-session { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 14px; border: 1px solid #edf3f6; border-radius: 9px; color: #7890a0; font-size: .82rem; }
+.config-session__device { color: #12324c; font-weight: 600; }
+
+html[data-text-size='pequeno'] { font-size: 14px; }
+html[data-text-size='normal'] { font-size: 16px; }
+html[data-text-size='grande'] { font-size: 18px; }
+html[data-high-contrast='true'] .admin-shell { filter: contrast(1.12); }
+html[data-reduce-motion='true'] * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+@media (max-width: 640px) { .config-panel, .config-plan { display: grid; gap: 16px; padding: 19px; } .config-preferences--billing { grid-template-columns: 1fr; } .config-preferences--billing .config-plan { grid-column: auto; } .config-choice-grid { grid-template-columns: 1fr; } .config-select { width: 100%; } .config-session { align-items: flex-start; flex-direction: column; } }

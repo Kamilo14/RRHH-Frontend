@@ -57,6 +57,7 @@ export interface CrearTrabajadorRequest {
   departamentoId?: string
   cargoId?: string
   jefaturaId?: string
+  activo?: boolean
   rol?: string
 }
 
@@ -85,6 +86,7 @@ export async function crearTrabajador(data: CrearTrabajadorRequest): Promise<Tra
     departamento_id: data.departamentoId || null,
     cargo_id: data.cargoId || null,
     jefatura_id: data.jefaturaId || null,
+    activo: data.activo ?? true,
   })
   return normalizarTrabajador(res.datos)
 }
@@ -128,6 +130,7 @@ export async function actualizarTrabajador(
     departamentoId: data.departamentoId || null,
     cargoId: data.cargoId || null,
     jefaturaId: data.jefaturaId || null,
+    activo: data.activo,
   })
   return normalizarTrabajador(res.datos)
 }
