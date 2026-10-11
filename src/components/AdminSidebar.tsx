@@ -4,6 +4,8 @@ import { useAuth as useOidcAuth } from 'react-oidc-context'
 import { clearAuth } from '../services/httpClient'
 import { signOutRedirect } from '../config/oidcConfig'
 import { contarNoLeidas } from '../services/notificacionesService'
+import { canAccessSection } from '../security/accessControl'
+import { useAuth } from '../context/AuthContext'
 
 export type AdminSection =
   | 'resumen'
@@ -15,6 +17,11 @@ export type AdminSection =
   | 'configuracion'
   | 'configuracion-cuenta'
   | 'configuracion-roles'
+  | 'seguridad'
+  | 'facturacion'
+  | 'aspecto'
+  | 'idioma'
+  | 'accesibilidad'
 
 type AdminSidebarProps = {
   activeSection: AdminSection
@@ -39,6 +46,7 @@ const navigationItems: NavigationItem[] = [
 
 function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey = 0 }: AdminSidebarProps) {
   const oidcAuth = useOidcAuth()
+  const { user } = useAuth()
   const [noLeidas, setNoLeidas] = useState(0)
 
   useEffect(() => {
@@ -71,7 +79,7 @@ function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey =
 
       <nav className="admin-sidebar__nav" aria-label="Navegación administrativa">
         <span className="admin-sidebar__section-title">Gestión de RRHH</span>
-        {navigationItems.map((item) => (
+        {navigationItems.filter((item) => canAccessSection(user?.role, item.id)).map((item) => (
           <button
             className={`admin-sidebar__link${activeSection === item.id ? ' admin-sidebar__link--active' : ''}`}
             key={item.id}

@@ -45,6 +45,7 @@ function Trabajadores() {
     departamentoId: '',
     cargoId: '',
     jefaturaId: '',
+    activo: true,
     rol: 'TRABAJADOR',
   })
 
@@ -142,6 +143,7 @@ function Trabajadores() {
         departamentoId: '',
         cargoId: '',
         jefaturaId: '',
+        activo: true,
         rol: 'TRABAJADOR',
       })
       cargarDatos()
@@ -170,6 +172,7 @@ function Trabajadores() {
       departamentoId: '',
       cargoId: '',
       jefaturaId: '',
+      activo: true,
       rol: 'TRABAJADOR',
     })
     setFormError('')
@@ -188,6 +191,7 @@ function Trabajadores() {
       departamentoId: departamentos.find((departamento) => departamento.id === trabajador.departamentoId)?.nombre ?? '',
       cargoId: cargos.find((cargo) => cargo.id === trabajador.cargoId)?.nombre ?? '',
       jefaturaId: trabajador.jefaturaId ?? '',
+      activo: trabajador.activo,
       rol: trabajador.rol ?? 'TRABAJADOR',
     })
     setShowForm(true)
@@ -277,6 +281,14 @@ function Trabajadores() {
                   <option value="ADMIN_RRHH">Admin de RRHH</option>
                 </select>
                 <small>SUPERADMIN es exclusivo del propietario de la plataforma.</small>
+              </div>
+              <div className="form-group">
+                <label htmlFor="estado">Estado laboral *</label>
+                <select id="estado" value={formData.activo ? 'activo' : 'inactivo'} onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'activo' })}>
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                </select>
+                <small>Inactivo conserva el historial, pero lo excluye de la operación vigente.</small>
               </div>
               <div className="form-group">
                 <label htmlFor="nombre">Nombre *</label>
