@@ -174,6 +174,12 @@ export async function asignarUsuario(id: string, data: AsignarUsuarioRequest): P
   return res.datos
 }
 
+/** Rechaza una solicitud iniciada desde el login. */
+export async function rechazarSolicitudUsuario(id: string): Promise<UsuarioResponse> {
+  const res = await apiPatch<ApiResponse<UsuarioResponseApi>>(`${BASE}/usuarios/${id}/rechazar-solicitud`, {})
+  return normalizarUsuario(res.datos)
+}
+
 /** Cambia el estado de un usuario (ACTIVO / INACTIVO) */
 export async function cambiarEstadoUsuario(id: string, data: CambiarEstadoRequest): Promise<UsuarioResponse> {
   const res = await apiPatch<ApiResponse<UsuarioResponse>>(`${BASE}/usuarios/${id}/estado`, data)
