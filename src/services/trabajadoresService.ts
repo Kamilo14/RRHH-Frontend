@@ -101,17 +101,25 @@ export class CuentaPendienteError extends Error {
   }
 }
 
-export async function crearTrabajadorConCuenta(data: CrearTrabajadorRequest, pendiente: TrabajadorResponse | null = null) {
+export interface CuentaProvisionada {
+  trabajador: TrabajadorResponse
+  contrasenaTemporal: string | null
+}
+
+export async function crearTrabajadorConCuenta(
+  data: CrearTrabajadorRequest,
+  pendiente: TrabajadorResponse | null = null,
+): Promise<CuentaProvisionada> {
   const trabajador = pendiente ?? await crearTrabajador(data)
   try {
-    await invitarUsuario({
+    const cuenta = await invitarUsuario({
       email: trabajador.email,
       nombre: `${trabajador.nombre} ${trabajador.apellido}`,
       trabajadorId: trabajador.id,
       crearEnCognito: true,
       rol: data.rol ?? 'TRABAJADOR',
     })
-    return trabajador
+    return { trabajador, contrasenaTemporal: cuenta.contrasenaTemporal }
   } catch (error) {
     throw new CuentaPendienteError(trabajador, error, data.rol ?? 'TRABAJADOR')
   }
