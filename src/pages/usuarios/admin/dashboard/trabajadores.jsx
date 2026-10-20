@@ -22,13 +22,21 @@ function Trabajadores() {
   const [rolCuentaPendiente, setRolCuentaPendiente] = useState('TRABAJADOR')
   const [cuentaEnProceso, setCuentaEnProceso] = useState(null)
   const [cuentaMensaje, setCuentaMensaje] = useState('')
+  const [credencialesTemporales, setCredencialesTemporales] = useState(null)
 
   async function completarCuenta(trabajador) {
     setCuentaEnProceso(trabajador.id)
     setCuentaMensaje('')
     try {
-      await crearTrabajadorConCuenta({ rol: trabajador.rol ?? rolCuentaPendiente }, trabajador)
+      const cuenta = await crearTrabajadorConCuenta({ rol: trabajador.rol ?? rolCuentaPendiente }, trabajador)
       setCuentaMensaje(`Cuenta de ${trabajador.email} registrada en Cognito.`)
+      if (cuenta.contrasenaTemporal) {
+        setCredencialesTemporales({
+          nombre: `${trabajador.nombre} ${trabajador.apellido}`,
+          email: trabajador.email,
+          password: cuenta.contrasenaTemporal,
+        })
+      }
     } catch (err) {
       setCuentaMensaje(err.message)
     } finally {
@@ -129,7 +137,14 @@ function Trabajadores() {
           trabajador.id === actualizado.id ? actualizado : trabajador
         )))
       } else {
-        await crearTrabajadorConCuenta(formData, cuentaPendiente)
+        const cuenta = await crearTrabajadorConCuenta(formData, cuentaPendiente)
+        if (cuenta.contrasenaTemporal) {
+          setCredencialesTemporales({
+            nombre: `${cuenta.trabajador.nombre} ${cuenta.trabajador.apellido}`,
+            email: cuenta.trabajador.email,
+            password: cuenta.contrasenaTemporal,
+          })
+        }
       }
       setCuentaPendiente(null)
       setShowForm(false)
@@ -411,6 +426,32 @@ function Trabajadores() {
 
       {/* Estados de carga */}
       {cuentaMensaje && <p role="status">{cuentaMensaje}</p>}
+      {credencialesTemporales && (
+        <div className="modal-overlay" role="presentation">
+          <section className="modal-content" role="dialog" aria-modal="true" aria-labelledby="temporary-password-title">
+            <header className="modal-header">
+              <h2 id="temporary-password-title">Cuenta lista para ingresar</h2>
+              <button type="button" className="modal-close" aria-label="Cerrar" onClick={() => setCredencialesTemporales(null)}>×</button>
+            </header>
+            <div className="modal-form">
+              <p>Entrega estas credenciales a <strong>{credencialesTemporales.nombre}</strong> por un canal seguro.</p>
+              <div className="form-group">
+                <label>Correo</label>
+                <input value={credencialesTemporales.email} readOnly />
+              </div>
+              <div className="form-group">
+                <label>Contraseña temporal</label>
+                <input value={credencialesTemporales.password} readOnly aria-label="Contraseña temporal" />
+              </div>
+              <p className="trab-temporary-password__notice">Se mostrará una sola vez. Al ingresar, Cognito solicitará crear una contraseña nueva.</p>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => navigator.clipboard.writeText(credencialesTemporales.password)}>Copiar contraseña</button>
+                <button type="button" className="btn-primary" onClick={() => setCredencialesTemporales(null)}>Entendido</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {loading && (
         <div className="trab-state">
           <div className="trab-spinner" aria-label="Cargando…" />

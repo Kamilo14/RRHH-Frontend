@@ -368,3 +368,10 @@
 @keyframes trab-spin {
   to { transform: rotate(360deg); }
 }
+
+.trab-temporary-password__notice {
+  margin: 0;
+  color: #8a4b00;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}

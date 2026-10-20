@@ -58,6 +58,7 @@ export interface UsuarioResponse {
   estado: string
   trabajadorId: string | null
   cognitoSub: string | null
+  contrasenaTemporal: string | null
 }
 
 export interface TenantResolverResponse {
@@ -157,14 +158,14 @@ export async function crearUsuario(data: CrearUsuarioRequest): Promise<UsuarioRe
 
 /** Invita un trabajador al tenant */
 export async function invitarUsuario(data: InvitarUsuarioRequest): Promise<UsuarioResponse> {
-  const res = await apiPost<ApiResponse<UsuarioResponse>>(`${BASE}/usuarios/invitar`, {
+  const res = await apiPost<ApiResponse<UsuarioResponseApi>>(`${BASE}/usuarios/invitar`, {
     email: data.email,
     trabajador_id: data.trabajadorId,
     nombre: data.nombre,
     rol: data.rol,
     crear_en_cognito: data.crearEnCognito,
   })
-  return res.datos
+  return normalizarUsuario(res.datos)
 }
 
 /** Asigna un usuario a un tenant */
@@ -191,6 +192,8 @@ interface UsuarioResponseApi {
   trabajadorId?: string | null
   cognito_sub?: string | null
   cognitoSub?: string | null
+  contrasena_temporal?: string | null
+  contrasenaTemporal?: string | null
 }
 
 function normalizarUsuario(usuario: UsuarioResponseApi): UsuarioResponse {
@@ -203,5 +206,6 @@ function normalizarUsuario(usuario: UsuarioResponseApi): UsuarioResponse {
     estado: usuario.estado,
     trabajadorId: usuario.trabajadorId ?? usuario.trabajador_id ?? null,
     cognitoSub: usuario.cognitoSub ?? usuario.cognito_sub ?? null,
+    contrasenaTemporal: usuario.contrasenaTemporal ?? usuario.contrasena_temporal ?? null,
   }
 }
