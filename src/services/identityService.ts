@@ -85,6 +85,7 @@ export interface InvitarUsuarioRequest {
 export interface AsignarUsuarioRequest {
   tenantId: string
   rol: string
+  trabajadorId?: string
 }
 
 export interface CambiarEstadoRequest {

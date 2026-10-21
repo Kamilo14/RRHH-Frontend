@@ -296,6 +296,29 @@
   gap: 6px;
 }
 
+.trab-request-fields {
+  display: grid;
+  min-width: 250px;
+  gap: 6px;
+}
+
+.trab-request-fields input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #d9e8f0;
+  border-radius: 7px;
+  color: #12324c;
+  background: #fff;
+  font: inherit;
+  font-size: .78rem;
+}
+
+.trab-request-fields input:focus {
+  outline: none;
+  border-color: #1687b8;
+  box-shadow: 0 0 0 3px rgba(22, 135, 184, .1);
+}
+
 .trab-action-btn {
   padding: 6px 10px;
   border: 1px solid #d9e8f0;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../../context/AuthContext'
-import { listarTrabajadores, desactivarTrabajador, actualizarTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
+import { listarTrabajadores, desactivarTrabajador, actualizarTrabajador, crearTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
 import { listarUsuarios, listarUsuariosPendientes, asignarUsuario, rechazarSolicitudUsuario } from '../../../../services/identityService'
 import '../../../../styles/trabajadores.css'
 import '../../../../styles/modal.css'
@@ -26,7 +26,7 @@ function Trabajadores() {
   const [vista, setVista] = useState('trabajadores')
   const [solicitudesAcceso, setSolicitudesAcceso] = useState([])
   const [solicitudEnProceso, setSolicitudEnProceso] = useState(null)
-  const [trabajadorParaSolicitud, setTrabajadorParaSolicitud] = useState({})
+  const [datosFichaSolicitud, setDatosFichaSolicitud] = useState({})
 
   async function completarCuenta(trabajador) {
     setCuentaEnProceso(trabajador.id)
@@ -75,16 +75,42 @@ function Trabajadores() {
   }
 
   async function aprobarSolicitud(solicitud) {
-    const trabajadorId = trabajadorParaSolicitud[solicitud.id]
-    if (!trabajadorId) {
-      setCuentaMensaje('Selecciona el trabajador al que corresponde esta solicitud antes de aprobarla.')
+    const datosFicha = datosFichaSolicitud[solicitud.id] ?? {}
+    const nombreCompleto = (datosFicha.nombreCompleto ?? solicitud.nombre ?? '').trim()
+    const rutTrabajador = (datosFicha.rutTrabajador ?? '').trim()
+    const partesNombre = nombreCompleto.split(/\s+/).filter(Boolean)
+
+    if (partesNombre.length < 2) {
+      setCuentaMensaje('Ingresa el nombre y apellido del solicitante para crear su ficha de trabajador.')
       return
     }
+
+    const trabajadorExistente = trabajadores.find((trabajador) =>
+      trabajador.email?.toLowerCase() === solicitud.email?.toLowerCase(),
+    )
+    if (!trabajadorExistente && !rutTrabajador) {
+      setCuentaMensaje('Ingresa el RUT para crear la ficha laboral del solicitante.')
+      return
+    }
+
     setSolicitudEnProceso(solicitud.id)
     try {
-      await asignarUsuario(solicitud.id, { tenantId: user?.tenantId ?? '', rol: 'Trabajador', trabajadorId })
+      const trabajador = trabajadorExistente ?? await crearTrabajador({
+        nombre: partesNombre[0],
+        apellido: partesNombre.slice(1).join(' '),
+        rutTrabajador,
+        email: solicitud.email,
+        activo: true,
+        rol: 'TRABAJADOR',
+      })
+      await asignarUsuario(solicitud.id, { tenantId: user?.tenantId ?? '', rol: 'Trabajador', trabajadorId: trabajador.id })
       setSolicitudesAcceso((actuales) => actuales.filter((item) => item.id !== solicitud.id))
-      setCuentaMensaje(`Acceso aprobado para ${solicitud.email}.`)
+      setDatosFichaSolicitud((actuales) => {
+        const { [solicitud.id]: _, ...resto } = actuales
+        return resto
+      })
+      await cargarDatos()
+      setCuentaMensaje(`Ficha y acceso aprobados para ${solicitud.email}. La persona debe cerrar e iniciar sesión para actualizar sus permisos.`)
     } catch (err) {
       setCuentaMensaje(err.message ?? 'No fue posible aprobar la solicitud.')
     } finally {
@@ -521,12 +547,12 @@ function Trabajadores() {
       {vista === 'solicitudes' && (
         <div className="trab-table-wrap">
           <table className="trab-table">
-            <thead><tr><th>Solicitante</th><th>Correo</th><th>Vincular a trabajador</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Solicitante</th><th>Correo</th><th>Datos para su ficha</th><th>Acciones</th></tr></thead>
             <tbody>
               {solicitudesAcceso.length === 0 ? <tr><td colSpan={4} className="trab-table__empty">No hay solicitudes de acceso pendientes.</td></tr> : solicitudesAcceso.map((solicitud) => (
                 <tr key={solicitud.id}>
                   <td>{solicitud.nombre || 'Sin nombre'}</td><td>{solicitud.email}</td>
-                  <td><select value={trabajadorParaSolicitud[solicitud.id] ?? ''} onChange={(event) => setTrabajadorParaSolicitud((actual) => ({ ...actual, [solicitud.id]: event.target.value }))}><option value="">Seleccionar trabajador…</option>{trabajadores.filter((trabajador) => trabajador.activo).map((trabajador) => <option key={trabajador.id} value={trabajador.id}>{trabajador.nombre} {trabajador.apellido}</option>)}</select></td>
+                  <td><div className="trab-request-fields"><input type="text" aria-label={`Nombre completo de ${solicitud.email}`} placeholder="Nombre y apellido" value={datosFichaSolicitud[solicitud.id]?.nombreCompleto ?? solicitud.nombre ?? ''} onChange={(event) => setDatosFichaSolicitud((actual) => ({ ...actual, [solicitud.id]: { ...actual[solicitud.id], nombreCompleto: event.target.value } }))} /><input type="text" aria-label={`RUT de ${solicitud.email}`} placeholder="RUT (ej. 12.345.678-9)" value={datosFichaSolicitud[solicitud.id]?.rutTrabajador ?? ''} onChange={(event) => setDatosFichaSolicitud((actual) => ({ ...actual, [solicitud.id]: { ...actual[solicitud.id], rutTrabajador: event.target.value } }))} /></div></td>
                   <td><div className="trab-table__actions"><button type="button" className="btn-secondary" disabled={solicitudEnProceso === solicitud.id} onClick={() => aprobarSolicitud(solicitud)}>Aprobar</button><button type="button" className="trab-action-btn trab-action-btn--danger" disabled={solicitudEnProceso === solicitud.id} onClick={() => rechazarSolicitud(solicitud)}>Rechazar</button></div></td>
                 </tr>
               ))}
