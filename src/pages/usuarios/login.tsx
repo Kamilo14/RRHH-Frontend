@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth as useOidcAuth } from 'react-oidc-context'
+import { useAuth as useAppAuth } from '../../context/AuthContext'
 import '../../styles/login.css'
 import { getMe, solicitarAcceso } from '../../services/identityService'
 import { clearAuth, saveAuth } from '../../services/httpClient'
@@ -17,6 +18,7 @@ function dashboardForRole(role?: string | null): string {
 function Login() {
   const navigate = useNavigate()
   const oidcAuth = useOidcAuth()
+  const { refreshUser } = useAppAuth()
   const [mode, setMode] = useState<AuthMode>('login')
   const [company, setCompany] = useState('')
   const [name, setName] = useState('')
@@ -71,6 +73,7 @@ function Login() {
 
         saveAuth(oidcAuth.user.id_token, user.tenantSlug || '')
         sessionStorage.removeItem('rrhh_google_mode')
+        await refreshUser()
         if (!cancelled) navigate(dashboardForRole(user.role), { replace: true })
       } catch (oauthError) {
         clearAuth()
@@ -134,6 +137,7 @@ function Login() {
           return
         }
         saveAuth(token, user.tenantSlug || '')
+        await refreshUser()
         navigate(dashboardForRole(user.role), { replace: true })
       })
       .catch((cognitoError) => {
@@ -172,6 +176,7 @@ function Login() {
           return
         }
         saveAuth(token, user.tenantSlug || '')
+        await refreshUser()
         navigate(dashboardForRole(user.role), { replace: true })
       })
       .catch((cognitoError) => {
