@@ -4,7 +4,7 @@ import { useAuth as useOidcAuth } from 'react-oidc-context'
 import { clearAuth } from '../services/httpClient'
 import { signOutRedirect } from '../config/oidcConfig'
 import { contarNoLeidas } from '../services/notificacionesService'
-import { canAccessSection } from '../security/accessControl'
+import { canAccessSection, normalizeRole } from '../security/accessControl'
 import { useAuth } from '../context/AuthContext'
 
 export type AdminSection =
@@ -48,6 +48,8 @@ function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey =
   const oidcAuth = useOidcAuth()
   const { user } = useAuth()
   const [noLeidas, setNoLeidas] = useState(0)
+  const visibleNavigationItems = navigationItems.filter((item) => canAccessSection(user?.role, item.id))
+  const isTrabajador = normalizeRole(user?.role) === 'TRABAJADOR'
 
   useEffect(() => {
     contarNoLeidas().then((respuesta) => setNoLeidas(respuesta.count)).catch(() => setNoLeidas(0))
@@ -78,8 +80,8 @@ function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey =
       </div>
 
       <nav className="admin-sidebar__nav" aria-label="Navegación administrativa">
-        <span className="admin-sidebar__section-title">Gestión de RRHH</span>
-        {navigationItems.filter((item) => canAccessSection(user?.role, item.id)).map((item) => (
+        <span className="admin-sidebar__section-title">{isTrabajador ? 'Mi espacio' : 'Gestión de RRHH'}</span>
+        {visibleNavigationItems.map((item) => (
           <button
             className={`admin-sidebar__link${activeSection === item.id ? ' admin-sidebar__link--active' : ''}`}
             key={item.id}
@@ -96,7 +98,7 @@ function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey =
       </nav>
 
       <div className="admin-sidebar__footer">
-        <button
+        {canAccessSection(user?.role, 'configuracion') && <button
           className={`admin-sidebar__footer-link${activeSection.startsWith('configuracion') ? ' admin-sidebar__footer-link--active' : ''}`}
           type="button"
           onClick={() => onSectionChange('configuracion')}
@@ -104,7 +106,7 @@ function AdminSidebar({ activeSection, onSectionChange, notificationRefreshKey =
         >
           <span aria-hidden="true">⚙</span>
           Configuración
-        </button>
+        </button>}
         <button className="admin-sidebar__footer-link admin-sidebar__footer-link--logout" type="button" onClick={() => void handleSignOut()}>
           <span aria-hidden="true">↪</span>
           Cerrar sesión
