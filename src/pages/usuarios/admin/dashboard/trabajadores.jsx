@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../../context/AuthContext'
 import { listarTrabajadores, desactivarTrabajador, actualizarTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
-import { listarUsuarios } from '../../../../services/identityService'
+import { listarUsuarios, listarUsuariosPendientes, asignarUsuario, rechazarSolicitudUsuario } from '../../../../services/identityService'
 import '../../../../styles/trabajadores.css'
 import '../../../../styles/modal.css'
 
@@ -23,6 +23,10 @@ function Trabajadores() {
   const [cuentaEnProceso, setCuentaEnProceso] = useState(null)
   const [cuentaMensaje, setCuentaMensaje] = useState('')
   const [credencialesTemporales, setCredencialesTemporales] = useState(null)
+  const [vista, setVista] = useState('trabajadores')
+  const [solicitudesAcceso, setSolicitudesAcceso] = useState([])
+  const [solicitudEnProceso, setSolicitudEnProceso] = useState(null)
+  const [trabajadorParaSolicitud, setTrabajadorParaSolicitud] = useState({})
 
   async function completarCuenta(trabajador) {
     setCuentaEnProceso(trabajador.id)
@@ -59,7 +63,48 @@ function Trabajadores() {
 
   useEffect(() => {
     cargarDatos()
+    cargarSolicitudes()
   }, [user?.tenantId, user?.trabajadorId])
+
+  async function cargarSolicitudes() {
+    try {
+      setSolicitudesAcceso(await listarUsuariosPendientes())
+    } catch {
+      setSolicitudesAcceso([])
+    }
+  }
+
+  async function aprobarSolicitud(solicitud) {
+    const trabajadorId = trabajadorParaSolicitud[solicitud.id]
+    if (!trabajadorId) {
+      setCuentaMensaje('Selecciona el trabajador al que corresponde esta solicitud antes de aprobarla.')
+      return
+    }
+    setSolicitudEnProceso(solicitud.id)
+    try {
+      await asignarUsuario(solicitud.id, { tenantId: user?.tenantId ?? '', rol: 'Trabajador', trabajadorId })
+      setSolicitudesAcceso((actuales) => actuales.filter((item) => item.id !== solicitud.id))
+      setCuentaMensaje(`Acceso aprobado para ${solicitud.email}.`)
+    } catch (err) {
+      setCuentaMensaje(err.message ?? 'No fue posible aprobar la solicitud.')
+    } finally {
+      setSolicitudEnProceso(null)
+    }
+  }
+
+  async function rechazarSolicitud(solicitud) {
+    if (!confirm(`¿Rechazar la solicitud de ${solicitud.email}?`)) return
+    setSolicitudEnProceso(solicitud.id)
+    try {
+      await rechazarSolicitudUsuario(solicitud.id)
+      setSolicitudesAcceso((actuales) => actuales.filter((item) => item.id !== solicitud.id))
+      setCuentaMensaje(`Solicitud de ${solicitud.email} rechazada.`)
+    } catch (err) {
+      setCuentaMensaje(err.message ?? 'No fue posible rechazar la solicitud.')
+    } finally {
+      setSolicitudEnProceso(null)
+    }
+  }
 
   async function cargarDatos() {
     try {
@@ -244,6 +289,11 @@ function Trabajadores() {
       {/* Toolbar */}
       <div className="trab-toolbar">
         <div className="trab-toolbar__left">
+          <div className="trab-filter-tabs" role="tablist" aria-label="Vista de trabajadores">
+            <button type="button" className={`trab-filter-tab${vista === 'trabajadores' ? ' trab-filter-tab--active' : ''}`} onClick={() => setVista('trabajadores')}>Trabajadores</button>
+            <button type="button" className={`trab-filter-tab${vista === 'solicitudes' ? ' trab-filter-tab--active' : ''}`} onClick={() => setVista('solicitudes')}>Solicitudes{solicitudesAcceso.length > 0 ? ` (${solicitudesAcceso.length})` : ''}</button>
+          </div>
+          {vista === 'trabajadores' && <>
           <div className="trab-search">
             <span className="trab-search__icon" aria-hidden="true">⌕</span>
             <input
@@ -266,15 +316,16 @@ function Trabajadores() {
               </button>
             ))}
           </div>
+          </>}
         </div>
-        <button
+        {vista === 'trabajadores' && <button
           id="btn-nuevo-trabajador"
           type="button"
           className="trab-btn-primary"
           onClick={() => setShowForm(true)}
         >
           <span aria-hidden="true">＋</span> Nuevo trabajador
-        </button>
+        </button>}
       </div>
 
       {/* Formulario de nuevo trabajador */}
@@ -467,7 +518,24 @@ function Trabajadores() {
         </div>
       )}
 
-      {!loading && !error && (
+      {vista === 'solicitudes' && (
+        <div className="trab-table-wrap">
+          <table className="trab-table">
+            <thead><tr><th>Solicitante</th><th>Correo</th><th>Vincular a trabajador</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {solicitudesAcceso.length === 0 ? <tr><td colSpan={4} className="trab-table__empty">No hay solicitudes de acceso pendientes.</td></tr> : solicitudesAcceso.map((solicitud) => (
+                <tr key={solicitud.id}>
+                  <td>{solicitud.nombre || 'Sin nombre'}</td><td>{solicitud.email}</td>
+                  <td><select value={trabajadorParaSolicitud[solicitud.id] ?? ''} onChange={(event) => setTrabajadorParaSolicitud((actual) => ({ ...actual, [solicitud.id]: event.target.value }))}><option value="">Seleccionar trabajador…</option>{trabajadores.filter((trabajador) => trabajador.activo).map((trabajador) => <option key={trabajador.id} value={trabajador.id}>{trabajador.nombre} {trabajador.apellido}</option>)}</select></td>
+                  <td><div className="trab-table__actions"><button type="button" className="btn-secondary" disabled={solicitudEnProceso === solicitud.id} onClick={() => aprobarSolicitud(solicitud)}>Aprobar</button><button type="button" className="trab-action-btn trab-action-btn--danger" disabled={solicitudEnProceso === solicitud.id} onClick={() => rechazarSolicitud(solicitud)}>Rechazar</button></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {vista === 'trabajadores' && !loading && !error && (
         <>
           <p className="trab-count">
             Mostrando <strong>{filtrados.length}</strong> de {trabajadores.length} trabajadores

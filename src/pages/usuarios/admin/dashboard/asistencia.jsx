@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { listarMarcasAsistencia, listarMarcasPorTrabajador, listarHorasExtra, crearHoraExtra, aprobarHoraExtra, rechazarHoraExtra } from '../../../../services/asistenciaService'
+import { listarMarcasAsistencia, listarMarcasPorTrabajador, listarHorasExtra, crearHoraExtra, aprobarHoraExtra, rechazarHoraExtra, registrarMarca } from '../../../../services/asistenciaService'
 import { listarTrabajadores } from '../../../../services/trabajadoresService'
 import { listarSolicitudesPorTrabajador } from '../../../../services/ausenciasService'
+import { useAuth } from '../../../../context/AuthContext'
 import '../../../../styles/asistencia.css'
 
 // La funcionalidad se conserva para su próxima integración, pero no se muestra aún en la interfaz.
@@ -89,7 +90,7 @@ const estadoInfo = {
   justificado: { label: 'Justificado',      color: 'orange'},
 }
 
-function Asistencia() {
+function AsistenciaGestion() {
   const [marcas, setMarcas]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -456,6 +457,92 @@ function Asistencia() {
       )}
     </div>
   )
+}
+
+function MiAsistencia({ trabajadorId }) {
+  const [marcas, setMarcas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [registrando, setRegistrando] = useState(false)
+  const hoy = fechaLocalISO()
+
+  const cargar = async () => {
+    if (!trabajadorId) {
+      setError('Tu cuenta aún no está vinculada a un trabajador. Pide a RRHH que complete la asignación y vuelve a iniciar sesión.')
+      setLoading(false)
+      return
+    }
+    try {
+      setLoading(true)
+      setError(null)
+      setMarcas(await listarMarcasPorTrabajador(trabajadorId))
+    } catch (err) {
+      setError(err.message ?? 'No fue posible cargar tu asistencia.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { cargar() }, [trabajadorId])
+
+  const marcaHoy = marcas.find((marca) => marca.fechaHora.slice(0, 10) === hoy)
+  const historial = procesarHistorial(marcas)
+
+  async function marcarAsistencia() {
+    try {
+      setRegistrando(true)
+      setError(null)
+      await registrarMarca({ trabajadorId, tipo: 'ENTRADA', origen: 'WEB' })
+      await cargar()
+    } catch (err) {
+      setError(err.message ?? 'No fue posible registrar tu asistencia.')
+    } finally {
+      setRegistrando(false)
+    }
+  }
+
+  return (
+    <div className="asist-page">
+      <section className="asist-personal-card">
+        <div>
+          <span className="asist-date-card__label">Mi asistencia</span>
+          <h2>{textoFecha(hoy)}</h2>
+          <p>{marcaHoy ? `Registraste tu asistencia a las ${new Date(marcaHoy.fechaHora).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}.` : 'Registra tu asistencia una sola vez durante el día.'}</p>
+        </div>
+        <button type="button" className="asist-personal-card__action" onClick={marcarAsistencia} disabled={loading || registrando || Boolean(marcaHoy) || !trabajadorId}>
+          {registrando ? 'Registrando…' : marcaHoy ? 'Asistencia registrada' : 'Marcar asistencia'}
+        </button>
+      </section>
+
+      {loading && <div className="trab-state"><div className="trab-spinner" /><span>Cargando tu asistencia…</span></div>}
+      {error && !loading && <div className="trab-state trab-state--error"><span>⚠</span><span>{error}</span><button type="button" onClick={cargar}>Reintentar</button></div>}
+
+      {!loading && !error && (
+        <section className="asist-table-wrap">
+          <table className="asist-table">
+            <thead><tr><th>Fecha</th><th>Registro</th><th>Estado</th></tr></thead>
+            <tbody>
+              {historial.length === 0 ? (
+                <tr><td colSpan="3" className="asist-personal-card__empty">Aún no tienes asistencias registradas.</td></tr>
+              ) : historial.map((dia) => (
+                <tr key={dia.fecha}>
+                  <td className="asist-table__name">{textoFecha(dia.fecha)}</td>
+                  <td className="asist-table__time">{dia.entrada ?? '—'}</td>
+                  <td><span className={`asist-badge asist-badge--${dia.entrada ? 'green' : 'red'}`}>{dia.entrada ? 'Registrada' : 'Sin registro'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function Asistencia() {
+  const { user } = useAuth()
+  const esTrabajador = ['Trabajador', 'TRABAJADOR', 'ROLE_TRABAJADOR'].includes(user?.role ?? '')
+  return esTrabajador ? <MiAsistencia trabajadorId={user?.trabajadorId} /> : <AsistenciaGestion />
 }
 
 export default Asistencia

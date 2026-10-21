@@ -34,6 +34,25 @@
   flex-wrap: wrap;
 }
 
+.asist-personal-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px;
+  border: 1px solid #d9e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.asist-personal-card h2 { margin: 5px 0; color: #12324c; font-size: 1.16rem; text-transform: capitalize; }
+.asist-personal-card p { margin: 0; color: #7890a0; font-size: .86rem; }
+.asist-personal-card__action { padding: 10px 16px; border: 0; border-radius: 8px; color: #fff; background: #147eaf; cursor: pointer; font: inherit; font-size: .84rem; font-weight: 700; white-space: nowrap; }
+.asist-personal-card__action:disabled { color: #6f8795; background: #edf3f6; cursor: default; }
+.asist-personal-card__empty { padding: 24px; color: #7890a0; text-align: center; }
+
+@media (max-width: 640px) { .asist-personal-card { align-items: flex-start; flex-direction: column; } }
+
 .asist-date-card {
   display: flex;
   flex-direction: column;

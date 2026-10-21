@@ -8,8 +8,10 @@ import { authenticate, confirmSignUp, signUp, type NewPasswordChallenge } from '
 
 type AuthMode = 'login' | 'register' | 'new-password'
 
-function dashboardForRole(): string {
-  return '/admin/dashboard'
+function dashboardForRole(role?: string | null): string {
+  return ['SuperAdmin', 'SUPERADMIN', 'ROLE_SUPERADMIN', 'Admin de RRHH', 'ADMIN_RRHH', 'ROLE_ADMIN_RRHH'].includes(role ?? '')
+    ? '/admin/dashboard'
+    : '/dashboard'
 }
 
 function Login() {
@@ -69,7 +71,7 @@ function Login() {
 
         saveAuth(oidcAuth.user.id_token, user.tenantSlug || '')
         sessionStorage.removeItem('rrhh_google_mode')
-        if (!cancelled) navigate(dashboardForRole(), { replace: true })
+        if (!cancelled) navigate(dashboardForRole(user.role), { replace: true })
       } catch (oauthError) {
         clearAuth()
         if (!cancelled) {
@@ -132,7 +134,7 @@ function Login() {
           return
         }
         saveAuth(token, user.tenantSlug || '')
-        navigate(dashboardForRole(), { replace: true })
+        navigate(dashboardForRole(user.role), { replace: true })
       })
       .catch((cognitoError) => {
       setIsCognitoLoading(false)
@@ -170,7 +172,7 @@ function Login() {
           return
         }
         saveAuth(token, user.tenantSlug || '')
-        navigate(dashboardForRole(), { replace: true })
+        navigate(dashboardForRole(user.role), { replace: true })
       })
       .catch((cognitoError) => {
         setError(cognitoError instanceof Error

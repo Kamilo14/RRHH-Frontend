@@ -38,7 +38,11 @@ const permissions: Record<string, SidebarSection[]> = {
 
 export function normalizeRole(role: string | null | undefined): string {
   if (!role) return ''
-  return roleAliases[role] ?? role.trim()
+  const rawRole = role.trim()
+  const canonicalRole = rawRole.toUpperCase()
+  return roleAliases[rawRole]
+    ?? roleAliases[canonicalRole]
+    ?? (canonicalRole === 'ADMIN DE RRHH' ? 'ADMIN_RRHH' : canonicalRole)
 }
 
 export function canAccessSection(role: string | null | undefined, section: SidebarSection): boolean {
