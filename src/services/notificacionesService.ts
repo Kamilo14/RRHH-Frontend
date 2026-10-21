@@ -26,13 +26,17 @@ export interface NotificacionResponse {
   cuerpo: string
   estado: string
   creadoEn: string
+  /** Evento de negocio que originó la notificación, p. ej. `ausencia.solicitada`. */
+  tipoEvento: string | null
+  /** Id del recurso asociado (solicitud, contrato, etc.). */
+  referenciaId: string | null
 }
 
 export interface ServiceStatusResponse {
   servicio: string
   version: string
   estado: string
-  rabbitmqHost: string
+  sqsEventsQueueUrl: string
   redisHost: string
   notificacionesPendientes: number
 }
@@ -90,6 +94,10 @@ interface NotificacionApiResponse {
   estado: string
   creado_en?: string
   creadoEn?: string
+  tipo_evento?: string | null
+  tipoEvento?: string | null
+  referencia_id?: string | null
+  referenciaId?: string | null
 }
 
 function normalizarNotificacion(notificacion: NotificacionApiResponse): NotificacionResponse {
@@ -102,5 +110,7 @@ function normalizarNotificacion(notificacion: NotificacionApiResponse): Notifica
     cuerpo: notificacion.cuerpo,
     estado: notificacion.estado,
     creadoEn: notificacion.creadoEn ?? notificacion.creado_en ?? '',
+    tipoEvento: notificacion.tipoEvento ?? notificacion.tipo_evento ?? null,
+    referenciaId: notificacion.referenciaId ?? notificacion.referencia_id ?? null,
   }
 }
