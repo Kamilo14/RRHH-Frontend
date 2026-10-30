@@ -4,7 +4,12 @@
  *
  * Endpoints cubiertos:
  *  GET  /api/v1/auth/me                       → perfil del usuario autenticado
- *  GET  /api/v1/tenants/resolver?nombre=xxx   → resolver empresa por nombre (público)
+ *  GET  /api/v1/tenants/resolver?rut=xxx      → resolver empresa por RUT (público)
+ *  POST /api/v1/tenants                       → registrar empresa (usuario sin empresa)
+ *  POST /api/v1/auth/access-requests          → solicitar acceso a una empresa por RUT
+ *  GET  /api/v1/plataforma/tenants?estado=x   → empresas de la plataforma
+ *  POST /api/v1/plataforma/tenants/:id/activar|rechazar → revisar empresa
+ *  POST /api/v1/plataforma/usuarios           → crear OperadorSaaS o SuperAdmin
  *  GET  /api/v1/usuarios                      → listar usuarios del tenant
  *  GET  /api/v1/usuarios/pendientes           → usuarios pendientes de asignación
  *  GET  /api/v1/usuarios/:id                  → obtener usuario por id
@@ -33,6 +38,8 @@ export interface MeResponse {
   codigo: string | null
   pendiente: boolean
   tenantSlug: string | null
+  tenantEstado: string | null
+  tenantNombre: string | null
 }
 
 interface MeResponseApi {
@@ -47,6 +54,8 @@ interface MeResponseApi {
   codigo: string | null
   pendiente: boolean
   tenant_slug: string | null
+  tenant_estado?: string | null
+  tenant_nombre?: string | null
 }
 
 export interface UsuarioResponse {
@@ -62,9 +71,63 @@ export interface UsuarioResponse {
 }
 
 export interface TenantResolverResponse {
-  tenantId: string
-  nombre: string
+  existe: boolean
   slug: string
+  nombreEmpresa: string
+}
+
+interface TenantResolverResponseApi {
+  existe: boolean
+  slug: string
+  nombre_empresa: string
+}
+
+export interface RegistrarEmpresaData {
+  razonSocial: string
+  nombreFantasia: string
+  rutEmpresa: string
+  giro: string
+  codigoActividad?: string
+  direccionCalle: string
+  direccionNumero: string
+  comuna: string
+  region: string
+  emailContacto: string
+  telefonoContacto?: string
+  representanteNombre: string
+  representanteRut: string
+  aceptaTerminos: boolean
+}
+
+export interface TenantResumen {
+  id: string
+  nombreEmpresa: string
+  slug: string
+  activo: boolean
+  estado: string
+  rutEmpresa: string | null
+  razonSocial: string | null
+  registradoPorEmail: string | null
+  cognitoError: string | null
+}
+
+interface TenantResumenApi {
+  id: string
+  nombre_empresa: string
+  slug: string
+  activo: boolean
+  estado: string
+  rut_empresa?: string | null
+  razon_social?: string | null
+  registrado_por_email?: string | null
+  cognito_error?: string | null
+}
+
+export interface CrearUsuarioPlataformaData {
+  email: string
+  nombre: string
+  rol: 'OperadorSaaS' | 'SuperAdmin'
+  tenantId?: string
 }
 
 export interface CrearUsuarioRequest {
@@ -93,7 +156,7 @@ export interface CambiarEstadoRequest {
 }
 
 export interface SolicitarAccesoRequest {
-  tenantSlug: string
+  rutEmpresa: string
 }
 
 // ─── Funciones ────────────────────────────────────────────────────────────────
@@ -113,24 +176,82 @@ export async function getMe(): Promise<MeResponse> {
     codigo: res.datos.codigo,
     pendiente: res.datos.pendiente,
     tenantSlug: res.datos.tenant_slug,
+    tenantEstado: res.datos.tenant_estado ?? null,
+    tenantNombre: res.datos.tenant_nombre ?? null,
   }
 }
 
+/** Solicita acceso a la empresa identificada por su RUT (S3). */
 export async function solicitarAcceso(data: SolicitarAccesoRequest): Promise<UsuarioResponse> {
-  const res = await apiPost<ApiResponse<UsuarioResponse>>(`${BASE}/auth/access-requests`, {
-    tenant_slug: data.tenantSlug,
+  const res = await apiPost<ApiResponse<UsuarioResponseApi>>(`${BASE}/auth/access-requests`, {
+    rut_empresa: data.rutEmpresa,
   })
-  return res.datos
+  return normalizarUsuario(res.datos)
 }
 
 /**
- * Resuelve el tenantId/slug a partir del nombre de empresa.
- * Es público (no requiere token).
+ * Resuelve la empresa a partir de su RUT. Es público (no requiere token).
+ * Rechaza con el mensaje del servidor si el RUT es inválido (400) o la empresa no existe (404).
  */
-export async function resolverEmpresa(nombre: string): Promise<TenantResolverResponse> {
-  const url = `${BASE}/tenants/resolver?nombre=${encodeURIComponent(nombre)}`
-  const res = await apiRequest<ApiResponse<TenantResolverResponse>>(url, { public: true })
-  return res.datos
+export async function resolverEmpresaPorRut(rut: string): Promise<TenantResolverResponse> {
+  const url = `${BASE}/tenants/resolver?rut=${encodeURIComponent(rut)}`
+  const res = await apiRequest<ApiResponse<TenantResolverResponseApi>>(url, { public: true })
+  return {
+    existe: res.datos.existe,
+    slug: res.datos.slug,
+    nombreEmpresa: res.datos.nombre_empresa,
+  }
+}
+
+/** Registra la empresa del usuario autenticado; queda PENDIENTE_ACTIVACION (S1). */
+export async function registrarEmpresa(data: RegistrarEmpresaData): Promise<TenantResumen> {
+  const res = await apiPost<ApiResponse<TenantResumenApi>>(`${BASE}/tenants`, {
+    razon_social: data.razonSocial,
+    nombre_fantasia: data.nombreFantasia,
+    rut_empresa: data.rutEmpresa,
+    giro: data.giro,
+    codigo_actividad: data.codigoActividad?.trim() || null,
+    direccion_calle: data.direccionCalle,
+    direccion_numero: data.direccionNumero,
+    comuna: data.comuna,
+    region: data.region,
+    email_contacto: data.emailContacto,
+    telefono_contacto: data.telefonoContacto?.trim() || null,
+    representante_nombre: data.representanteNombre,
+    representante_rut: data.representanteRut,
+    acepta_terminos: data.aceptaTerminos,
+  })
+  return normalizarTenant(res.datos)
+}
+
+/** Lista las empresas de la plataforma, opcionalmente filtradas por estado (S2). */
+export async function listarEmpresasPlataforma(estado?: string): Promise<TenantResumen[]> {
+  const query = estado ? `?estado=${encodeURIComponent(estado)}` : ''
+  const res = await apiRequest<ApiResponse<TenantResumenApi[]>>(`${BASE}/plataforma/tenants${query}`)
+  return res.datos.map(normalizarTenant)
+}
+
+/** Activa una empresa PENDIENTE_ACTIVACION (solo AdminPlataforma). */
+export async function activarEmpresa(id: string): Promise<TenantResumen> {
+  const res = await apiPost<ApiResponse<TenantResumenApi>>(`${BASE}/plataforma/tenants/${encodeURIComponent(id)}/activar`, {})
+  return normalizarTenant(res.datos)
+}
+
+/** Rechaza una empresa PENDIENTE_ACTIVACION con un motivo (solo AdminPlataforma). */
+export async function rechazarEmpresa(id: string, motivo: string): Promise<TenantResumen> {
+  const res = await apiPost<ApiResponse<TenantResumenApi>>(`${BASE}/plataforma/tenants/${encodeURIComponent(id)}/rechazar`, { motivo })
+  return normalizarTenant(res.datos)
+}
+
+/** Crea un OperadorSaaS (sin empresa) o el SuperAdmin de una empresa ACTIVA (solo AdminPlataforma). */
+export async function crearUsuarioPlataforma(data: CrearUsuarioPlataformaData): Promise<UsuarioResponse> {
+  const res = await apiPost<ApiResponse<UsuarioResponseApi>>(`${BASE}/plataforma/usuarios`, {
+    email: data.email,
+    nombre: data.nombre,
+    rol: data.rol,
+    tenant_id: data.rol === 'SuperAdmin' ? data.tenantId ?? null : null,
+  })
+  return normalizarUsuario(res.datos)
 }
 
 /** Lista todos los usuarios del tenant */
@@ -207,6 +328,20 @@ interface UsuarioResponseApi {
   cognitoSub?: string | null
   contrasena_temporal?: string | null
   contrasenaTemporal?: string | null
+}
+
+function normalizarTenant(tenant: TenantResumenApi): TenantResumen {
+  return {
+    id: tenant.id,
+    nombreEmpresa: tenant.nombre_empresa,
+    slug: tenant.slug,
+    activo: tenant.activo,
+    estado: tenant.estado,
+    rutEmpresa: tenant.rut_empresa ?? null,
+    razonSocial: tenant.razon_social ?? null,
+    registradoPorEmail: tenant.registrado_por_email ?? null,
+    cognitoError: tenant.cognito_error ?? null,
+  }
 }
 
 function normalizarUsuario(usuario: UsuarioResponseApi): UsuarioResponse {

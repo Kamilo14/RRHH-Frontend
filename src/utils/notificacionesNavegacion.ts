@@ -1,17 +1,19 @@
 import { canAccessSection, type SidebarSection } from '../security/accessControl'
 
-export type SeccionNotificacion = Extract<SidebarSection, 'ausencias' | 'contratos' | 'asistencia'>
+export type SeccionNotificacion = Extract<SidebarSection, 'ausencias' | 'contratos' | 'asistencia' | 'trabajadores'>
 
 const SECCION_POR_EVENTO: Record<string, SeccionNotificacion> = {
   ausencia: 'ausencias',
   contrato: 'contratos',
   asistencia: 'asistencia',
+  acceso: 'trabajadores',
 }
 
 export const NOMBRE_SECCION: Record<SeccionNotificacion, string> = {
   ausencias: 'Ausencias',
   contratos: 'Contratos',
   asistencia: 'Asistencia',
+  trabajadores: 'Trabajadores',
 }
 
 /**

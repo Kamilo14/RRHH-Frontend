@@ -6,14 +6,9 @@ import '../../styles/login.css'
 import { getMe, solicitarAcceso } from '../../services/identityService'
 import { clearAuth, saveAuth } from '../../services/httpClient'
 import { authenticate, confirmSignUp, signUp, type NewPasswordChallenge } from '../../services/cognitoAuth'
+import { dashboardForRole } from '../../security/accessControl'
 
 type AuthMode = 'login' | 'register' | 'new-password'
-
-function dashboardForRole(role?: string | null): string {
-  return ['SuperAdmin', 'SUPERADMIN', 'ROLE_SUPERADMIN', 'Admin de RRHH', 'ADMIN_RRHH', 'ROLE_ADMIN_RRHH'].includes(role ?? '')
-    ? '/admin/dashboard'
-    : '/dashboard'
-}
 
 function Login() {
   const navigate = useNavigate()
@@ -54,7 +49,7 @@ function Login() {
 
         if (flowMode === 'register') {
           if (!tenantSlug) throw new Error('Debes indicar la empresa para solicitar el registro.')
-          await solicitarAcceso({ tenantSlug })
+          await solicitarAcceso({ rutEmpresa: tenantSlug })
           clearAuth()
           await oidcAuth.removeUser()
           sessionStorage.removeItem('rrhh_google_mode')
@@ -228,7 +223,7 @@ function Login() {
         }
         const token = result.token
         saveAuth(token, '')
-        await solicitarAcceso({ tenantSlug: company.trim() })
+        await solicitarAcceso({ rutEmpresa: company.trim() })
         clearAuth()
         setPending(true)
       })
