@@ -7,6 +7,7 @@ import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import Login from './pages/usuarios/login'
 import Dashboard from './pages/usuarios/admin/dashboard/Dashboard'
 import RegistroEmpresa from './pages/registro-empresa/RegistroEmpresa'
+import Plataforma from './pages/plataforma/Plataforma'
 
 function App() {
   return (
@@ -31,6 +32,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['Jefatura', 'Trabajador']}>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/plataforma"
+                element={
+                  <ProtectedRoute allowedRoles={['AdminPlataforma', 'OperadorSaaS']}>
+                    <Plataforma />
                   </ProtectedRoute>
                 }
               />
