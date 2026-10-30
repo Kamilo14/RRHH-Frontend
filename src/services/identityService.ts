@@ -175,6 +175,12 @@ export async function asignarUsuario(id: string, data: AsignarUsuarioRequest): P
   return res.datos
 }
 
+/** Cambia el rol de acceso del usuario vinculado a un trabajador (ADMIN_RRHH | JEFATURA | TRABAJADOR). */
+export async function cambiarRolPorTrabajador(trabajadorId: string, rol: string): Promise<UsuarioResponse> {
+  const res = await apiPatch<ApiResponse<UsuarioResponseApi>>(`${BASE}/usuarios/trabajador/${trabajadorId}/rol`, { rol })
+  return normalizarUsuario(res.datos)
+}
+
 /** Rechaza una solicitud iniciada desde el login. */
 export async function rechazarSolicitudUsuario(id: string): Promise<UsuarioResponse> {
   const res = await apiPatch<ApiResponse<UsuarioResponseApi>>(`${BASE}/usuarios/${id}/rechazar-solicitud`, {})

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../../../context/AuthContext'
 import { listarTrabajadores, desactivarTrabajador, actualizarTrabajador, crearTrabajador, crearTrabajadorConCuenta, CuentaPendienteError, listarDepartamentos, listarCargos } from '../../../../services/trabajadoresService'
-import { listarUsuarios, listarUsuariosPendientes, asignarUsuario, rechazarSolicitudUsuario } from '../../../../services/identityService'
+import { listarUsuarios, listarUsuariosPendientes, asignarUsuario, rechazarSolicitudUsuario, cambiarRolPorTrabajador } from '../../../../services/identityService'
 import '../../../../styles/trabajadores.css'
 import '../../../../styles/modal.css'
 
@@ -196,6 +196,11 @@ function Trabajadores() {
     }
   }
 
+  // Normaliza etiquetas y códigos de rol ("Jefatura", "ROLE_JEFATURA", "JEFATURA") para compararlos.
+  function rolDeAcceso(rol) {
+    return String(rol ?? '').replace(/^ROLE_/, '').replace(/ de /i, '_').toUpperCase()
+  }
+
   async function handleCrearTrabajador(e) {
     e.preventDefault()
     setFormError('')
@@ -203,9 +208,24 @@ function Trabajadores() {
 
     try {
       if (editingTrabajadorId) {
+        const actual = trabajadores.find((trabajador) => trabajador.id === editingTrabajadorId)
         const actualizado = await actualizarTrabajador(editingTrabajadorId, formData)
+        // La respuesta de trabajadores no trae el rol (vive en identity): se conserva el actual
+        // y solo se cambia si el administrador eligió otro.
+        let rolFinal = actual?.rol
+        if (rolDeAcceso(formData.rol) !== rolDeAcceso(actual?.rol ?? 'TRABAJADOR')) {
+          try {
+            const cuenta = await cambiarRolPorTrabajador(editingTrabajadorId, formData.rol)
+            rolFinal = cuenta.rol
+          } catch (errRol) {
+            setTrabajadores((prev) => prev.map((trabajador) => (
+              trabajador.id === actualizado.id ? { ...actualizado, rol: actual?.rol } : trabajador
+            )))
+            throw new Error(`Los datos se guardaron, pero no se pudo cambiar el rol: ${errRol.message}`)
+          }
+        }
         setTrabajadores((prev) => prev.map((trabajador) => (
-          trabajador.id === actualizado.id ? actualizado : trabajador
+          trabajador.id === actualizado.id ? { ...actualizado, rol: rolFinal } : trabajador
         )))
       } else {
         const cuenta = await crearTrabajadorConCuenta(formData, cuentaPendiente)
