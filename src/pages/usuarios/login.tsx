@@ -1,108 +1,206 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth as useOidcAuth } from 'react-oidc-context'
 import { useAuth as useAppAuth } from '../../context/AuthContext'
 import '../../styles/login.css'
-import { getMe, solicitarAcceso } from '../../services/identityService'
+import { getMe, resolverEmpresaPorRut, solicitarAcceso, type MeResponse } from '../../services/identityService'
 import { clearAuth, saveAuth } from '../../services/httpClient'
-import { authenticate, confirmSignUp, signUp, type NewPasswordChallenge } from '../../services/cognitoAuth'
+import { authenticate, type NewPasswordChallenge } from '../../services/cognitoAuth'
 import { dashboardForRole } from '../../security/accessControl'
+import { estadoDeAcceso, type EstadoAcceso } from '../../utils/estadoAcceso'
+import { necesitaRefrescar } from '../../utils/jwtClaims'
 
-type AuthMode = 'login' | 'register' | 'new-password'
+type AuthMode = 'login' | 'unirme' | 'new-password'
+type GoogleMode = 'login' | 'unirme' | 'registro-empresa'
+
+const GOOGLE_MODE_KEY = 'rrhh_google_mode'
+const GOOGLE_RUT_KEY = 'rrhh_google_rut'
+const MENSAJE_REFRESCO = 'Cierra sesión y vuelve a ingresar para actualizar tus permisos'
+const MENSAJE_CUENTA_INACTIVA = 'Tu cuenta no está activa. Contacta al área de RRHH de tu empresa.'
+
+const TITULO_ESTADO: Record<Exclude<EstadoAcceso['tipo'], 'activo'>, string> = {
+  'no-registrado': 'Cuenta sin empresa',
+  'empresa-en-revision': 'Empresa en revisión',
+  'solicitud-enviada': 'Solicitud enviada',
+  rechazado: 'Solicitud rechazada',
+}
+
+function leerGoogleMode(): GoogleMode {
+  const valor = sessionStorage.getItem(GOOGLE_MODE_KEY)
+  return valor === 'unirme' || valor === 'registro-empresa' ? valor : 'login'
+}
+
+function limpiarGoogleSession(): void {
+  sessionStorage.removeItem(GOOGLE_MODE_KEY)
+  sessionStorage.removeItem(GOOGLE_RUT_KEY)
+}
+
+function mensajeDe(error: unknown, porDefecto: string): string {
+  return error instanceof Error && error.message ? error.message : porDefecto
+}
 
 function Login() {
   const navigate = useNavigate()
   const oidcAuth = useOidcAuth()
   const { refreshUser } = useAppAuth()
   const [mode, setMode] = useState<AuthMode>('login')
-  const [company, setCompany] = useState('')
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmationCode, setConfirmationCode] = useState('')
-  const [confirmationPending, setConfirmationPending] = useState(false)
+  const [rutEmpresa, setRutEmpresa] = useState('')
+  const [empresaEncontrada, setEmpresaEncontrada] = useState<string | null>(null)
+  const [isResolviendo, setIsResolviendo] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState('')
   const [newPasswordChallenge, setNewPasswordChallenge] = useState<NewPasswordChallenge | null>(null)
   const [error, setError] = useState('')
-  const [pending, setPending] = useState(false)
+  const [acceso, setAcceso] = useState<EstadoAcceso | null>(null)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [isCognitoLoading, setIsCognitoLoading] = useState(false)
+  const procesandoGoogleRef = useRef(false)
+
+  /**
+   * Decide qué hacer con la respuesta de `/auth/me`: entrar al dashboard (refrescando el token si
+   * sus claims quedaron viejos), ir al registro de empresa o mostrar la pantalla de estado (S7, S8).
+   * Devuelve true si navegó fuera del login.
+   */
+  const completarAcceso = async (
+    me: MeResponse,
+    token: string,
+    refrescar: () => Promise<string | null>,
+    googleMode: GoogleMode,
+  ): Promise<boolean> => {
+    const estado = estadoDeAcceso(me)
+
+    if (estado.tipo === 'no-registrado' && googleMode === 'registro-empresa') {
+      saveAuth(token, '')
+      navigate('/registro-empresa', { replace: true })
+      return true
+    }
+
+    if (estado.tipo !== 'activo') {
+      clearAuth()
+      setAcceso(estado)
+      return false
+    }
+
+    if (me.estado !== 'ACTIVO') {
+      clearAuth()
+      setError(MENSAJE_CUENTA_INACTIVA)
+      return false
+    }
+
+    let vigente = token
+    if (necesitaRefrescar(token, me)) {
+      const nuevo = await refrescar().catch(() => null)
+      if (!nuevo || necesitaRefrescar(nuevo, me)) {
+        clearAuth()
+        setError(MENSAJE_REFRESCO)
+        return false
+      }
+      vigente = nuevo
+    }
+
+    saveAuth(vigente, me.tenantSlug || '')
+    await refreshUser()
+    navigate(dashboardForRole(me.role), { replace: true })
+    return true
+  }
 
   useEffect(() => {
-    const savedMode = sessionStorage.getItem('rrhh_google_mode')
-    if (savedMode === 'register') setMode('register')
-  }, [])
+    const idToken = oidcAuth.user?.id_token
+    if (oidcAuth.isLoading || !idToken || procesandoGoogleRef.current) return
+    procesandoGoogleRef.current = true
 
-  useEffect(() => {
-    let cancelled = false
+    const googleMode = leerGoogleMode()
+    const rutGuardado = sessionStorage.getItem(GOOGLE_RUT_KEY)
+    limpiarGoogleSession()
 
     const finishGoogleLogin = async () => {
-      if (oidcAuth.isLoading || !oidcAuth.user?.id_token || cancelled) return
-
       try {
         if (oidcAuth.error) throw oidcAuth.error
-        const flowMode = sessionStorage.getItem('rrhh_google_mode') as AuthMode | null
-        const tenantSlug = sessionStorage.getItem('rrhh_google_tenant_slug')
-        saveAuth(oidcAuth.user.id_token, tenantSlug || '')
+        saveAuth(idToken, '')
 
-        if (flowMode === 'register') {
-          if (!tenantSlug) throw new Error('Debes indicar la empresa para solicitar el registro.')
-          await solicitarAcceso({ rutEmpresa: tenantSlug })
-          clearAuth()
-          await oidcAuth.removeUser()
-          sessionStorage.removeItem('rrhh_google_mode')
-          sessionStorage.removeItem('rrhh_google_tenant_slug')
-          if (!cancelled) setPending(true)
-          return
+        if (googleMode === 'unirme') {
+          if (!rutGuardado) throw new Error('Debes indicar el RUT de tu empresa para solicitar acceso.')
+          await solicitarAcceso({ rutEmpresa: rutGuardado })
         }
 
-        const user = await getMe()
-        if (user.pendiente || user.estado === 'PENDIENTE' || !user.tenantId) {
-          clearAuth()
-          await oidcAuth.removeUser()
-          if (!cancelled) setPending(true)
-          return
-        }
-
-        saveAuth(oidcAuth.user.id_token, user.tenantSlug || '')
-        sessionStorage.removeItem('rrhh_google_mode')
-        await refreshUser()
-        if (!cancelled) navigate(dashboardForRole(user.role), { replace: true })
+        const me = await getMe()
+        const refrescar = async () => (await oidcAuth.signinSilent())?.id_token ?? null
+        const salio = await completarAcceso(me, idToken, refrescar, googleMode)
+        if (!salio) await oidcAuth.removeUser()
       } catch (oauthError) {
         clearAuth()
-        if (!cancelled) {
-          setError(oauthError instanceof Error ? oauthError.message : 'No se pudo completar la autenticación.')
-        }
+        setError(mensajeDe(oauthError, 'No se pudo completar la autenticación.'))
+        await oidcAuth.removeUser().catch(() => undefined)
+      } finally {
+        procesandoGoogleRef.current = false
       }
     }
 
     void finishGoogleLogin()
-    return () => { cancelled = true }
-  }, [navigate, oidcAuth.error, oidcAuth.isLoading, oidcAuth.user, oidcAuth.removeUser])
+    // completarAcceso se recrea en cada render; el efecto solo debe reaccionar al usuario OIDC.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oidcAuth.isLoading, oidcAuth.user])
 
-  const handleGoogle = async () => {
+  const redirigirAGoogle = async (googleMode: GoogleMode, rut?: string) => {
     setError('')
-    if (mode === 'register' && !company.trim()) {
-      setError('Ingresa la empresa para enviar la solicitud de registro.')
-      return
-    }
     setIsGoogleLoading(true)
-    sessionStorage.setItem('rrhh_google_mode', mode)
-    if (mode === 'register') {
-      sessionStorage.setItem('rrhh_google_tenant_slug', company.trim())
+    sessionStorage.setItem(GOOGLE_MODE_KEY, googleMode)
+    if (rut) {
+      sessionStorage.setItem(GOOGLE_RUT_KEY, rut)
     } else {
-      sessionStorage.removeItem('rrhh_google_tenant_slug')
+      sessionStorage.removeItem(GOOGLE_RUT_KEY)
     }
     try {
       await oidcAuth.signinRedirect({ extraQueryParams: { identity_provider: 'Google' } })
     } catch (oauthError) {
-      sessionStorage.removeItem('rrhh_google_mode')
-      sessionStorage.removeItem('rrhh_google_tenant_slug')
+      limpiarGoogleSession()
       setIsGoogleLoading(false)
-      setError(oauthError instanceof Error ? oauthError.message : 'No se pudo iniciar sesión con Google.')
+      setError(mensajeDe(oauthError, 'No se pudo iniciar sesión con Google.'))
     }
+  }
+
+  const irAUnirme = () => {
+    setAcceso(null)
+    setError('')
+    setEmpresaEncontrada(null)
+    setMode('unirme')
+  }
+
+  const volverAlInicio = () => {
+    setAcceso(null)
+    setError('')
+    setEmpresaEncontrada(null)
+    setMode('login')
+  }
+
+  const handleBuscarEmpresa = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+    setEmpresaEncontrada(null)
+    const rut = rutEmpresa.trim()
+    if (!rut) {
+      setError('Ingresa el RUT de tu empresa.')
+      return
+    }
+    setIsResolviendo(true)
+    void resolverEmpresaPorRut(rut)
+      .then((empresa) => {
+        if (!empresa.existe) {
+          setError('La empresa no está registrada en el sistema')
+          return
+        }
+        setEmpresaEncontrada(empresa.nombreEmpresa)
+      })
+      .catch((resolverError) => setError(mensajeDe(resolverError, 'No se pudo buscar la empresa.')))
+      .finally(() => setIsResolviendo(false))
+  }
+
+  const entrarConToken = async (token: string, refrescar: () => Promise<string | null>) => {
+    saveAuth(token, '')
+    const me = await getMe()
+    await completarAcceso(me, token, refrescar, 'login')
   }
 
   const handlePasswordLogin = (event: FormEvent<HTMLFormElement>) => {
@@ -114,33 +212,30 @@ function Login() {
       return
     }
 
+    const credenciales = { email: email.trim(), password }
+    // Una cuenta con contraseña no tiene refresh token de OIDC: refrescar es volver a autenticarse.
+    const reautenticar = async () => {
+      const result = await authenticate(credenciales.email, credenciales.password)
+      return result.kind === 'authenticated' ? result.token : null
+    }
+
     setIsCognitoLoading(true)
-    void authenticate(email.trim(), password)
+    void authenticate(credenciales.email, credenciales.password)
       .then(async (result) => {
         if (result.kind === 'new-password') {
           setNewPasswordChallenge(result.challenge)
           setMode('new-password')
-          setIsCognitoLoading(false)
           return
         }
-        const token = result.token
-        saveAuth(token, '')
-        const user = await getMe()
-        if (user.pendiente || user.estado !== 'ACTIVO' || !user.tenantId) {
-          clearAuth()
-          setPending(true)
-          return
-        }
-        saveAuth(token, user.tenantSlug || '')
-        await refreshUser()
-        navigate(dashboardForRole(user.role), { replace: true })
+        await entrarConToken(result.token, reautenticar)
       })
       .catch((cognitoError) => {
-      setIsCognitoLoading(false)
-      setError(cognitoError instanceof Error
-        ? cognitoError.message || 'Cognito rechazó las credenciales.'
-        : 'No se pudo iniciar el acceso con Cognito.')
+        clearAuth()
+        setError(cognitoError instanceof Error
+          ? cognitoError.message || 'Cognito rechazó las credenciales.'
+          : 'No se pudo iniciar el acceso con Cognito.')
       })
+      .finally(() => setIsCognitoLoading(false))
   }
 
   const handleNewPassword = (event: FormEvent<HTMLFormElement>) => {
@@ -160,21 +255,17 @@ function Login() {
       return
     }
 
+    const credenciales = { email: email.trim(), password: newPassword }
+    const reautenticar = async () => {
+      const result = await authenticate(credenciales.email, credenciales.password)
+      return result.kind === 'authenticated' ? result.token : null
+    }
+
     setIsCognitoLoading(true)
     void newPasswordChallenge.complete(newPassword)
-      .then(async (token) => {
-        saveAuth(token, '')
-        const user = await getMe()
-        if (user.pendiente || user.estado !== 'ACTIVO' || !user.tenantId) {
-          clearAuth()
-          setPending(true)
-          return
-        }
-        saveAuth(token, user.tenantSlug || '')
-        await refreshUser()
-        navigate(dashboardForRole(user.role), { replace: true })
-      })
+      .then((token) => entrarConToken(token, reautenticar))
       .catch((cognitoError) => {
+        clearAuth()
         setError(cognitoError instanceof Error
           ? cognitoError.message || 'Cognito no pudo establecer la nueva contraseña.'
           : 'No se pudo establecer la nueva contraseña.')
@@ -182,73 +273,85 @@ function Login() {
       .finally(() => setIsCognitoLoading(false))
   }
 
-  const handleNativeRegister = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError('')
-    if (!company.trim() || !name.trim() || !email.trim() || !password) {
-      setError('Completa empresa, nombre, correo y contraseña.')
-      return
-    }
-    setIsCognitoLoading(true)
-    void signUp({
-      email: email.trim(),
-      password,
-      name: name.trim(),
-      phone,
-    }).then(() => {
-      setConfirmationPending(true)
-      setIsCognitoLoading(false)
-    }).catch((cognitoError) => {
-      setIsCognitoLoading(false)
-      setError(cognitoError instanceof Error ? cognitoError.message : 'No se pudo crear la cuenta en Cognito.')
-    })
-  }
-
-  const handleConfirmation = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError('')
-    if (!confirmationCode.trim()) {
-      setError('Ingresa el código enviado por Cognito.')
-      return
-    }
-    setIsCognitoLoading(true)
-    void confirmSignUp(email.trim(), confirmationCode.trim())
-      .then(() => authenticate(email.trim(), password))
-      .then(async (result) => {
-        if (result.kind === 'new-password') {
-          setNewPasswordChallenge(result.challenge)
-          setConfirmationPending(false)
-          setMode('new-password')
-          return
-        }
-        const token = result.token
-        saveAuth(token, '')
-        await solicitarAcceso({ rutEmpresa: company.trim() })
-        clearAuth()
-        setPending(true)
-      })
-      .catch((cognitoError) => {
-        setError(cognitoError instanceof Error ? cognitoError.message : 'No se pudo confirmar la cuenta.')
-      })
-      .finally(() => setIsCognitoLoading(false))
-  }
-
-  if (pending) {
-
+  if (acceso && acceso.tipo !== 'activo') {
     return (
       <main className="login-page-wrapper">
         <section className="login-card-container login-pending-card">
           <div className="login-form-static">
-            <h2 className="form-title">Solicitud pendiente</h2>
-            <p className="form-subtitle">
-              Tu solicitud quedó registrada. Debes comunicarte con el Administrador de RRHH de tu empresa
-              para que revise y acepte tu acceso.
-            </p>
-            <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
-              Volver al inicio
-            </button>
+            <h2 className="form-title">{TITULO_ESTADO[acceso.tipo]}</h2>
+            <p className="form-subtitle">{acceso.texto}</p>
+            {acceso.tipo === 'no-registrado' ? (
+              <>
+                <button type="button" className="btn-primary" onClick={irAUnirme}>
+                  Unirme a mi empresa
+                </button>
+                <button type="button" className="btn-google" onClick={() => void redirigirAGoogle('registro-empresa')} disabled={isGoogleLoading}>
+                  Registrar mi empresa
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn-primary" onClick={volverAlInicio}>
+                Volver al inicio
+              </button>
+            )}
           </div>
         </section>
+      </main>
+    )
+  }
+
+  const branding = (
+    <section className="login-branding">
+      <h1>Gestión de Recursos Humanos</h1>
+      <p>Centraliza la información de tus trabajadores y administra tu empresa de forma segura.</p>
+      <ul className="branding-features">
+        <li>Gestión centralizada de trabajadores</li>
+        <li>Asistencia, contratos y ausencias</li>
+        <li>Acceso seguro por roles y empresa</li>
+      </ul>
+    </section>
+  )
+
+  if (mode === 'unirme') {
+    return (
+      <main className="login-page-wrapper">
+        <div className="login-card-container">
+          {branding}
+          <form onSubmit={handleBuscarEmpresa} className="login-form-static" noValidate>
+            <h2 className="form-title">Unirme a mi empresa</h2>
+            <span className="form-subtitle">Ingresa el RUT de tu empresa para solicitar acceso</span>
+            {error && <div className="login-error" role="alert">{error}</div>}
+            <div className="input-group">
+              <label htmlFor="rutEmpresa">RUT de la empresa</label>
+              <input
+                id="rutEmpresa"
+                type="text"
+                placeholder="76.086.428-5"
+                value={rutEmpresa}
+                onChange={(event) => { setRutEmpresa(event.target.value); setEmpresaEncontrada(null) }}
+              />
+            </div>
+            {empresaEncontrada ? (
+              <>
+                <p className="form-subtitle">¿Te refieres a {empresaEncontrada}?</p>
+                <button type="button" className="btn-google" onClick={() => void redirigirAGoogle('unirme', rutEmpresa.trim())} disabled={isGoogleLoading}>
+                  <span className="google-mark" aria-hidden="true">G</span>
+                  {isGoogleLoading ? 'Conectando con Google...' : 'Sí, continuar con Google'}
+                </button>
+                <button type="button" className="login-mode-link" onClick={() => setEmpresaEncontrada(null)}>
+                  No, buscar otra empresa
+                </button>
+              </>
+            ) : (
+              <button type="submit" className="btn-primary" disabled={isResolviendo}>
+                {isResolviendo ? 'Buscando empresa...' : 'Buscar empresa'}
+              </button>
+            )}
+            <button type="button" className="login-mode-link" onClick={volverAlInicio}>
+              Volver al inicio de sesión
+            </button>
+          </form>
+        </div>
       </main>
     )
   }
@@ -256,25 +359,13 @@ function Login() {
   return (
     <main className="login-page-wrapper">
       <div className="login-card-container">
-        <section className="login-branding">
-          <h1>Gestión de Recursos Humanos</h1>
-          <p>Centraliza la información de tus trabajadores y administra tu empresa de forma segura.</p>
-          <ul className="branding-features">
-            <li>Gestión centralizada de trabajadores</li>
-            <li>Asistencia, contratos y ausencias</li>
-            <li>Acceso seguro por roles y empresa</li>
-          </ul>
-        </section>
-        <form onSubmit={confirmationPending ? handleConfirmation : mode === 'register' ? handleNativeRegister : mode === 'new-password' ? handleNewPassword : handlePasswordLogin} className="login-form-static">
-          <h2 className="form-title">{mode === 'register' ? 'Crear acceso' : mode === 'new-password' ? 'Cambia tu contraseña' : 'Acceso a RRHH'}</h2>
+        {branding}
+        <form onSubmit={mode === 'new-password' ? handleNewPassword : handlePasswordLogin} className="login-form-static">
+          <h2 className="form-title">{mode === 'new-password' ? 'Cambia tu contraseña' : 'Acceso a RRHH'}</h2>
           <span className="form-subtitle">
-            {confirmationPending
-              ? 'Confirma el código enviado a tu correo'
-              : mode === 'register'
-                ? 'Crea tu cuenta y solicita acceso a una empresa'
-                : mode === 'new-password'
-                  ? 'Por seguridad, establece una contraseña permanente para continuar'
-                  : 'Ingresa con tu cuenta registrada'}
+            {mode === 'new-password'
+              ? 'Por seguridad, establece una contraseña permanente para continuar'
+              : 'Ingresa con tu cuenta registrada'}
           </span>
           {error && <div className="login-error" role="alert">{error}</div>}
           {mode === 'new-password' ? (
@@ -291,41 +382,7 @@ function Login() {
                 {isCognitoLoading ? 'Guardando contraseña...' : 'Guardar contraseña y continuar'}
               </button>
             </>
-          ) : confirmationPending ? (
-            <div className="input-group">
-              <label htmlFor="confirmationCode">Código de confirmación</label>
-              <input id="confirmationCode" type="text" value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value)} autoComplete="one-time-code" required />
-            </div>
-          ) : mode === 'register' && (
-            <div className="input-group">
-              <label htmlFor="company">Empresa</label>
-              <input id="company" type="text" placeholder="Nombre o identificador de la empresa" value={company} onChange={(event) => setCompany(event.target.value)} />
-            </div>
-          )}
-          {!confirmationPending && mode === 'register' && (
-            <>
-              <div className="input-group">
-                <label htmlFor="name">Nombre completo</label>
-                <input id="name" type="text" value={name} onChange={(event) => setName(event.target.value)} required />
-              </div>
-              <div className="input-group">
-                <label htmlFor="email">Correo</label>
-                <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
-              </div>
-              <div className="input-group">
-                <label htmlFor="phone">Celular</label>
-                <input id="phone" type="tel" placeholder="+56912345678" value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" />
-              </div>
-              <div className="input-group">
-                <label htmlFor="password">Contraseña</label>
-                <input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required />
-              </div>
-              <button type="submit" className="btn-primary" disabled={isCognitoLoading}>
-                {isCognitoLoading ? 'Creando cuenta...' : 'Crear cuenta'}
-              </button>
-            </>
-          )}
-          {!confirmationPending && mode === 'login' && (
+          ) : (
             <>
               <div className="input-group">
                 <label htmlFor="email">Correo</label>
@@ -360,16 +417,18 @@ function Login() {
               <div className="login-divider" aria-hidden="true">
                 <span>o</span>
               </div>
-            </>
-          )}
-          {!confirmationPending && mode !== 'new-password' && (
-            <>
-              <button type="button" className="btn-google" onClick={() => void handleGoogle()} disabled={isGoogleLoading}>
+              <button type="button" className="btn-google" onClick={() => void redirigirAGoogle('login')} disabled={isGoogleLoading}>
                 <span className="google-mark" aria-hidden="true">G</span>
                 {isGoogleLoading ? 'Conectando con Google...' : 'Continuar con Google'}
               </button>
-              <button type="button" className="login-mode-link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>
-                {mode === 'login' ? '¿No tienes acceso? Solicita registro' : 'Ya tengo una cuenta: iniciar sesión'}
+              <div className="login-divider" aria-hidden="true">
+                <span>¿Aún no tienes acceso?</span>
+              </div>
+              <button type="button" className="login-mode-link" onClick={irAUnirme}>
+                Unirme a mi empresa
+              </button>
+              <button type="button" className="login-mode-link" onClick={() => void redirigirAGoogle('registro-empresa')} disabled={isGoogleLoading}>
+                Registrar mi empresa
               </button>
             </>
           )}

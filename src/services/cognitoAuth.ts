@@ -1,7 +1,6 @@
 import {
   AuthenticationDetails,
   CognitoUser,
-  CognitoUserAttribute,
   CognitoUserPool,
   type CognitoUserSession,
 } from 'amazon-cognito-identity-js'
@@ -20,13 +19,6 @@ const userPool = new CognitoUserPool({
   ClientId: clientId,
 })
 
-export type CognitoSignUpData = {
-  email: string
-  password: string
-  name: string
-  phone: string
-}
-
 export type NewPasswordChallenge = {
   complete: (password: string) => Promise<string>
 }
@@ -34,39 +26,6 @@ export type NewPasswordChallenge = {
 export type AuthenticateResult =
   | { kind: 'authenticated'; token: string }
   | { kind: 'new-password'; challenge: NewPasswordChallenge }
-
-export function signUp(data: CognitoSignUpData): Promise<void> {
-  const attributes = [
-    new CognitoUserAttribute({ Name: 'email', Value: data.email }),
-    new CognitoUserAttribute({ Name: 'name', Value: data.name }),
-  ]
-  if (data.phone.trim()) {
-    attributes.push(new CognitoUserAttribute({ Name: 'phone_number', Value: data.phone.trim() }))
-  }
-
-  return new Promise((resolve, reject) => {
-    userPool.signUp(data.email, data.password, attributes, [], (error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
-export function confirmSignUp(email: string, code: string): Promise<void> {
-  const user = new CognitoUser({ Username: email, Pool: userPool })
-  return new Promise((resolve, reject) => {
-    user.confirmRegistration(code, true, (error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
-}
 
 export function authenticate(email: string, password: string): Promise<AuthenticateResult> {
   const user = new CognitoUser({ Username: email, Pool: userPool })
