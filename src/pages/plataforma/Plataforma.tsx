@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useAuth as useOidcAuth } from 'react-oidc-context'
 import { useAuth } from '../../context/AuthContext'
+import { signOutRedirect } from '../../config/oidcConfig'
+import { clearAuth } from '../../services/tokenStorage'
 import {
   activarEmpresa,
   crearUsuarioPlataforma,
@@ -27,9 +30,17 @@ function mensajeDe(error: unknown, porDefecto: string): string {
 
 /** Consola de plataforma (S2, S6): AdminPlataforma revisa empresas y crea cuentas; OperadorSaaS solo lee. */
 function Plataforma() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
+  const oidcAuth = useOidcAuth()
   const esAdmin = normalizeRole(user?.role) === 'ADMIN_PLATAFORMA'
   const [pestana, setPestana] = useState<Pestana>('empresas')
+
+  // Igual que AdminSidebar: sin removeUser, /login vuelve a entrar con el usuario OIDC guardado.
+  const cerrarSesion = async () => {
+    clearAuth()
+    await oidcAuth.removeUser().catch(() => undefined)
+    signOutRedirect()
+  }
 
   return (
     <main className="trab-page">
@@ -37,7 +48,7 @@ function Plataforma() {
         <div className="trab-toolbar__left">
           <h1>Consola de plataforma</h1>
         </div>
-        <button type="button" className="btn-secondary" onClick={logout}>Cerrar sesión</button>
+        <button type="button" className="btn-secondary" onClick={() => void cerrarSesion()}>Cerrar sesión</button>
       </div>
       <div className="trab-filter-tabs" role="tablist">
         <button

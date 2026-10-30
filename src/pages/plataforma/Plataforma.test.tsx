@@ -9,7 +9,13 @@ const mocks = vi.hoisted(() => ({
   rechazar: vi.fn(),
   crear: vi.fn(),
   logout: vi.fn(),
+  removeUser: vi.fn(),
+  signOutRedirect: vi.fn(),
+  clearAuth: vi.fn(),
 }))
+vi.mock('react-oidc-context', () => ({ useAuth: () => ({ removeUser: mocks.removeUser }) }))
+vi.mock('../../config/oidcConfig', () => ({ signOutRedirect: mocks.signOutRedirect }))
+vi.mock('../../services/tokenStorage', () => ({ clearAuth: mocks.clearAuth }))
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, logout: mocks.logout }) }))
 vi.mock('../../services/identityService', () => ({
   listarEmpresasPlataforma: mocks.listar,
@@ -29,6 +35,15 @@ afterEach(() => {
 })
 
 describe('Plataforma', () => {
+  it('cerrar sesión borra el token, el usuario OIDC y sale de Cognito', async () => {
+    mocks.user.role = 'OperadorSaaS'; mocks.listar.mockResolvedValue([]); mocks.removeUser.mockResolvedValue(undefined)
+    render(<Plataforma />)
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    await waitFor(() => expect(mocks.signOutRedirect).toHaveBeenCalled())
+    expect(mocks.clearAuth).toHaveBeenCalled()
+    expect(mocks.removeUser).toHaveBeenCalled()
+  })
+
   it('lista las empresas pendientes por defecto y filtra por estado', async () => {
     mocks.user.role = 'AdminPlataforma'; mocks.listar.mockResolvedValue([empresa])
     render(<Plataforma />)
