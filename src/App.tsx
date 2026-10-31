@@ -6,6 +6,8 @@ import { oidcConfig } from './config/oidcConfig'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import Login from './pages/usuarios/login'
 import Dashboard from './pages/usuarios/admin/dashboard/Dashboard'
+import RegistroEmpresa from './pages/registro-empresa/RegistroEmpresa'
+import Plataforma from './pages/plataforma/Plataforma'
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
           <TenantProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              {/* Sin ProtectedRoute: quien registra su empresa aún no tiene rol; la página exige token. */}
+              <Route path="/registro-empresa" element={<RegistroEmpresa />} />
               <Route
                 path="/admin/dashboard"
                 element={
@@ -28,6 +32,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['Jefatura', 'Trabajador']}>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/plataforma"
+                element={
+                  <ProtectedRoute allowedRoles={['AdminPlataforma', 'OperadorSaaS']}>
+                    <Plataforma />
                   </ProtectedRoute>
                 }
               />

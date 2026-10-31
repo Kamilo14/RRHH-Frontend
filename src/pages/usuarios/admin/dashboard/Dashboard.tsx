@@ -19,6 +19,7 @@ import { listarContratos, type ContratoResponse } from '../../../../services/con
 import { listarMarcasAsistencia, type MarcaAsistenciaResponse } from '../../../../services/asistenciaService'
 import { listarSolicitudesAusencia, type SolicitudAusenciaResponse } from '../../../../services/ausenciasService'
 import { canAccessSection } from '../../../../security/accessControl'
+import { leerClaims } from '../../../../utils/jwtClaims'
 
 const sectionTitles: Record<AdminSection, string> = {
   resumen: 'Resumen general',
@@ -48,18 +49,10 @@ function getCognitoDisplayName(): string | null {
     return null
   }
 
-  const payload = token.split('.')[1]
-  if (!payload) {
-    return null
-  }
-
-  try {
-    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const claims = JSON.parse(atob(normalizedPayload)) as CognitoClaims
-    return claims.name?.trim() || claims.given_name?.trim() || null
-  } catch {
-    return null
-  }
+  const claims = leerClaims(token) as CognitoClaims
+  const name = typeof claims.name === 'string' ? claims.name.trim() : ''
+  const givenName = typeof claims.given_name === 'string' ? claims.given_name.trim() : ''
+  return name || givenName || null
 }
 
 function getProfileDisplayName(user: MeResponse | null): string | null {
@@ -111,7 +104,7 @@ function Dashboard() {
       case 'ausencias':
         return <Inasistencia />
       case 'notificaciones':
-        return <Notificaciones onChange={() => setNotificationRefreshKey((current) => current + 1)} />
+        return <Notificaciones onChange={() => setNotificationRefreshKey((current) => current + 1)} onNavigate={setActiveSection} />
       case 'configuracion':
         return <Configuracion onSectionChange={setActiveSection} onBack={() => setActiveSection('resumen')} />
       case 'configuracion-roles':
