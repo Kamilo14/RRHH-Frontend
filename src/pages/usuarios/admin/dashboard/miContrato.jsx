@@ -100,6 +100,8 @@ function MiContrato() {
       if (!montadoRef.current) return
       setMio(datos)
       setCambiosSinGuardar(false)
+      // La preview anterior ya no corresponde al documento guardado: sin la nueva, no se puede aprobar.
+      ponerPdf(null)
       await cargarPdf()
     } catch (error) {
       if (!montadoRef.current) return

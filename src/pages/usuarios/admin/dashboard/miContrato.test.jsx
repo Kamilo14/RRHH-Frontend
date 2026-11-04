@@ -142,6 +142,19 @@ describe('Mi contrato', () => {
     expect(screen.getByRole('button', { name: 'Aprobar contrato' }).disabled).toBe(true)
   })
 
+  it('previewFallidaTrasGuardarNoDejaAprobarLaAnterior', async () => {
+    mocks.obtenerMiContrato.mockResolvedValue(enEspera())
+    mocks.guardarMisCampos.mockResolvedValue(enEspera({ documentoListo: true }))
+    render(<MiContrato />)
+    await guardarDomicilio()
+    mocks.obtenerMiContratoPdf.mockRejectedValueOnce(new Error('No se pudo generar la previsualización'))
+    fireEvent.change(screen.getByLabelText('Domicilio'), { target: { value: 'Otra calle 1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar y previsualizar' }))
+    expect(await screen.findByText('No se pudo generar la previsualización')).toBeTruthy()
+    expect(screen.queryByTitle('Contrato en PDF')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Aprobar contrato' })).toBeNull()
+  })
+
   it('rechazarVuelveASinContrato', async () => {
     window.prompt = vi.fn(() => 'Sueldo distinto')
     mocks.obtenerMiContrato.mockResolvedValue(enEspera())
