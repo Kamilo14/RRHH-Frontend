@@ -427,3 +427,7 @@ a.btn-primary {
   text-decoration: none;
   display: inline-block;
 }
+
+/* Estados del contrato: finalizado en gris */
+.cont-summary-card--gray { border-left-color: #9aaab5; }
+.cont-badge--gray { color: #5b6b76; background: #eef2f5; }

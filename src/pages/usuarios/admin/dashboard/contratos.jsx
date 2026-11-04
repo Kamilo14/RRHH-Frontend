@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
-import { listarContratos, finalizarContrato, crearContrato } from '../../../../services/contratosService'
+import {
+  listarContratos,
+  finalizarContrato,
+  obtenerCamposPlantilla,
+  emitirContrato,
+  obtenerContratoPdf,
+} from '../../../../services/contratosService'
 import { listarTrabajadores } from '../../../../services/trabajadoresService'
+import CamposPlantillaForm from '../../../../components/CamposPlantillaForm'
 import '../../../../styles/contratos.css'
 import '../../../../styles/modal.css'
 const TIPO_LABELS = {
@@ -9,18 +16,22 @@ const TIPO_LABELS = {
   HONORARIOS: 'Honorarios',
 }
 
-function calcularEstado(contrato) {
-  if (!contrato.activo) return 'vencido'
-  if (!contrato.fechaTermino) return 'vigente'
-  const hoy = new Date()
-  const termino = new Date(contrato.fechaTermino)
-  const diffDias = Math.ceil((termino - hoy) / (1000 * 60 * 60 * 24))
-  if (diffDias <= 30) return 'por vencer'
-  if (diffDias < 0) return 'vencido'
-  return 'vigente'
+const ESTADOS = ['PENDIENTE_FIRMA', 'FIRMADO', 'RECHAZADO', 'FINALIZADO']
+
+const ESTADO_LABELS = {
+  PENDIENTE_FIRMA: 'En espera de firma',
+  FIRMADO: 'Firmado',
+  RECHAZADO: 'Rechazado',
+  FINALIZADO: 'Finalizado',
 }
 
-const estadoColor = { vigente: 'green', vencido: 'red', 'por vencer': 'orange' }
+const estadoColor = { PENDIENTE_FIRMA: 'orange', FIRMADO: 'green', RECHAZADO: 'red', FINALIZADO: 'gray' }
+
+/** Un trabajador con un contrato en espera o firmado no puede recibir otro (S2). */
+const ESTADOS_QUE_OCUPAN = ['PENDIENTE_FIRMA', 'FIRMADO']
+
+/** El blob URL del PDF abierto en otra pestaña se libera después de que la pestaña lo cargó. */
+const LIBERAR_PDF_MS = 60_000
 
 function Contratos() {
   const [contratos, setContratos] = useState([])
@@ -32,14 +43,11 @@ function Contratos() {
   const [trabajadores, setTrabajadores] = useState([])
   const [formError, setFormError] = useState('')
   const [formLoading, setFormLoading] = useState(false)
+  const [camposRrhh, setCamposRrhh] = useState(null)
+  const [trabajadorId, setTrabajadorId] = useState('')
+  const [valores, setValores] = useState({})
+  const [erroresCampo, setErroresCampo] = useState({})
 
-  const [formData, setFormData] = useState({
-    trabajadorId: '',
-    salarioBase: '',
-    tipoContrato: '',
-    fechaInicio: '',
-    fechaTermino: '',
-  }) 
   useEffect(() => {
     fetchContratos()
     cargarTrabajadores()
@@ -77,29 +85,51 @@ function Contratos() {
     }
   }
 
-  async function handleCrearContrato(e) {
+  async function handleVerDetalle(id) {
+    try {
+      const url = URL.createObjectURL(await obtenerContratoPdf(id))
+      const ventana = window.open(url, '_blank')
+      if (!ventana) alert('El navegador bloqueó la ventana del PDF. Permite las ventanas emergentes para este sitio.')
+      setTimeout(() => URL.revokeObjectURL(url), LIBERAR_PDF_MS)
+    } catch (err) {
+      alert(err.message ?? 'Error al abrir el contrato')
+    }
+  }
+
+  function limpiarFormulario(campos) {
+    setTrabajadorId('')
+    setValores(Object.fromEntries((campos ?? []).map((campo) => [campo.clave, ''])))
+    setErroresCampo({})
+    setFormError('')
+  }
+
+  async function handleNuevoContrato() {
+    setShowForm(true)
+    limpiarFormulario(camposRrhh)
+    if (camposRrhh) return
+    try {
+      const campos = (await obtenerCamposPlantilla()).filter((campo) => campo.responsable === 'RRHH')
+      setCamposRrhh(campos)
+      limpiarFormulario(campos)
+    } catch (err) {
+      setFormError(err.message || 'No se pudieron cargar los campos de la plantilla')
+    }
+  }
+
+  async function handleEmitirContrato(e) {
     e.preventDefault()
     setFormError('')
+    setErroresCampo({})
     setFormLoading(true)
 
     try {
-      const contratoData = {
-        ...formData,
-        salarioBase: Number(formData.salarioBase),
-        fechaTermino: formData.fechaTermino || undefined,
-      }
-      await crearContrato(contratoData)
+      await emitirContrato(trabajadorId, valores)
       setShowForm(false)
-      setFormData({
-        trabajadorId: '',
-        salarioBase: '',
-        tipoContrato: '',
-        fechaInicio: '',
-        fechaTermino: '',
-      })
+      limpiarFormulario(camposRrhh)
       fetchContratos()
     } catch (err) {
-      setFormError(err.message || 'Error al crear contrato')
+      setErroresCampo(Object.fromEntries((err.errores ?? []).map((item) => [item.campo, item.detalle])))
+      setFormError(err.message || 'Error al emitir contrato')
     } finally {
       setFormLoading(false)
     }
@@ -107,22 +137,19 @@ function Contratos() {
 
   function handleCancelForm() {
     setShowForm(false)
-    setFormData({
-      trabajadorId: '',
-      salarioBase: '',
-      tipoContrato: '',
-      fechaInicio: '',
-      fechaTermino: '',
-    })
-    setFormError('')
+    limpiarFormulario(camposRrhh)
   }
 
-  const contratosConEstado = contratos.map((c) => ({ ...c, _estado: calcularEstado(c) }))
+  const ocupados = new Set(
+    contratos.filter((c) => ESTADOS_QUE_OCUPAN.includes(c.estado)).map((c) => c.trabajadorId)
+  )
+  const trabajadoresSinContrato = trabajadores.filter((t) => t.activo && !ocupados.has(t.id))
+
   const nombresPorTrabajador = new Map(trabajadores.map((trabajador) => [
     trabajador.id,
     `${trabajador.nombre} ${trabajador.apellido}`.trim(),
   ]))
-  const contratosPresentables = contratosConEstado.map((contrato) => ({
+  const contratosPresentables = contratos.map((contrato) => ({
     ...contrato,
     trabajadorNombre: nombresPorTrabajador.get(contrato.trabajadorId) ?? 'Trabajador sin ficha',
   }))
@@ -131,15 +158,13 @@ function Contratos() {
     const matchSearch = c.trabajadorNombre.toLowerCase().includes(search.toLowerCase()) ||
       c.trabajadorId.toLowerCase().includes(search.toLowerCase()) ||
       (c.tipoContrato ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchFiltro = filtro === 'todos' || c._estado === filtro
+    const matchFiltro = filtro === 'todos' || c.estado === filtro
     return matchSearch && matchFiltro
   })
 
-  const counts = {
-    vigente: contratosConEstado.filter(c => c._estado === 'vigente').length,
-    'por vencer': contratosConEstado.filter(c => c._estado === 'por vencer').length,
-    vencido: contratosConEstado.filter(c => c._estado === 'vencido').length,
-  }
+  const counts = Object.fromEntries(
+    ESTADOS.map((estado) => [estado, contratos.filter((c) => c.estado === estado).length])
+  )
 
   const formatMonto = (n) =>
     n != null ? `$${Number(n).toLocaleString('es-CL')}` : '—'
@@ -152,14 +177,10 @@ function Contratos() {
       {/* Resumen */}
       {!loading && !error && (
         <div className="cont-summary">
-          {[
-            { label: 'Vigentes', count: counts.vigente, color: 'green' },
-            { label: 'Por vencer', count: counts['por vencer'], color: 'orange' },
-            { label: 'Vencidos', count: counts.vencido, color: 'red' },
-          ].map((item) => (
-            <div key={item.label} className={`cont-summary-card cont-summary-card--${item.color}`}>
-              <span className="cont-summary-card__count">{item.count}</span>
-              <span className="cont-summary-card__label">{item.label}</span>
+          {ESTADOS.map((estado) => (
+            <div key={estado} className={`cont-summary-card cont-summary-card--${estadoColor[estado]}`}>
+              <span className="cont-summary-card__count">{counts[estado]}</span>
+              <span className="cont-summary-card__label">{ESTADO_LABELS[estado]}</span>
             </div>
           ))}
         </div>
@@ -178,113 +199,69 @@ function Contratos() {
           />
         </div>
         <div className="cont-filter-tabs">
-          {['todos', 'vigente', 'por vencer', 'vencido'].map((est) => (
+          {['todos', ...ESTADOS].map((est) => (
             <button
               key={est}
               type="button"
               className={`cont-filter-tab${filtro === est ? ' cont-filter-tab--active' : ''}`}
               onClick={() => setFiltro(est)}
             >
-              {est.charAt(0).toUpperCase() + est.slice(1)}
+              {est === 'todos' ? 'Todos' : ESTADO_LABELS[est]}
             </button>
           ))}
         </div>
-        <button id="btn-nuevo-contrato" type="button" className="cont-btn-primary" onClick={() => setShowForm(true)}>
+        <button id="btn-nuevo-contrato" type="button" className="cont-btn-primary" onClick={handleNuevoContrato}>
           <span aria-hidden="true">＋</span> Nuevo contrato
         </button>
       </div>
 
-      {/* Formulario de nuevo contrato */}
+      {/* Formulario de nuevo contrato: campos de RRHH de la plantilla */}
       {showForm && (
         <div className="form-card">
           <div className="form-card-header">
             <h3>Nuevo Contrato</h3>
-            <button type="button" onClick={handleCancelForm} className="btn-close">×</button>
+            <button type="button" onClick={handleCancelForm} className="btn-close" aria-label="Cerrar formulario">×</button>
           </div>
-          <form onSubmit={handleCrearContrato} className="form-card-body">
-            {formError && <div className="form-error">{formError}</div>}
+          <form onSubmit={handleEmitirContrato} className="form-card-body">
+            {formError && <div className="form-error" role="alert">{formError}</div>}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="trabajador">Trabajador *</label>
-                <select
-                  id="trabajador"
-                  required
-                  value={formData.trabajadorId}
-                  onChange={(e) => setFormData({ ...formData, trabajadorId: e.target.value })}
-                >
-                  <option value="">Seleccionar trabajador...</option>
-                  {trabajadores.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nombre} {t.apellido} ({t.rutTrabajador})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="tipoContrato">Tipo de contrato *</label>
-                <select
-                  id="tipoContrato"
-                  required
-                  value={formData.tipoContrato}
-                  onChange={(e) => setFormData({ ...formData, tipoContrato: e.target.value })}
-                >
-                  <option value="">Seleccionar tipo...</option>
-                  <option value="INDEFINIDO">Indefinido</option>
-                  <option value="PLAZO_FIJO">Plazo fijo</option>
-                  <option value="HONORARIOS">Honorarios</option>
-                </select>
-              </div>
+            <div className="form-group">
+              <label htmlFor="trabajador">Trabajador *</label>
+              <select
+                id="trabajador"
+                required
+                disabled={formLoading}
+                value={trabajadorId}
+                onChange={(e) => setTrabajadorId(e.target.value)}
+              >
+                <option value="">Seleccionar trabajador...</option>
+                {trabajadoresSinContrato.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nombre} {t.apellido} ({t.rutTrabajador})
+                  </option>
+                ))}
+              </select>
+              {trabajadoresSinContrato.length === 0 && <small>No hay trabajadores activos sin contrato.</small>}
+              {erroresCampo.trabajador_id && <small className="campo-error">{erroresCampo.trabajador_id}</small>}
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="salarioBase">Sueldo base *</label>
-                <input
-                  id="salarioBase"
-                  type="number"
-                  required
-                  min="0"
-                  step="1"
-                  value={formData.salarioBase}
-                  onChange={(e) => setFormData({ ...formData, salarioBase: e.target.value })}
-                  placeholder="Ej: 500000"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="fechaInicio">Fecha de inicio *</label>
-                <input
-                  id="fechaInicio"
-                  type="date"
-                  required
-                  value={formData.fechaInicio}
-                  onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="fechaTermino">Fecha de término (opcional)</label>
-                <input
-                  id="fechaTermino"
-                  type="date"
-                  value={formData.fechaTermino}
-                  onChange={(e) => setFormData({ ...formData, fechaTermino: e.target.value })}
-                  placeholder="Solo para contratos a plazo fijo"
-                />
-                <small>Dejar vacío para contratos indefinidos</small>
-              </div>
-            </div>
+            {camposRrhh === null && !formError && <p>Cargando campos de la plantilla…</p>}
+            {camposRrhh && (
+              <CamposPlantillaForm
+                campos={camposRrhh}
+                valores={valores}
+                onChange={setValores}
+                errores={erroresCampo}
+                disabled={formLoading}
+              />
+            )}
 
             <div className="form-actions">
               <button type="button" onClick={handleCancelForm} className="btn-secondary">
                 Cancelar
               </button>
-              <button type="submit" disabled={formLoading} className="btn-primary">
-                {formLoading ? 'Guardando...' : 'Guardar contrato'}
+              <button type="submit" disabled={formLoading || !camposRrhh} className="btn-primary">
+                {formLoading ? 'Enviando...' : 'Enviar contrato'}
               </button>
             </div>
           </form>
@@ -342,22 +319,24 @@ function Contratos() {
                     </td>
                     <td><strong>{formatMonto(c.salarioBase)}</strong></td>
                     <td>
-                      <span className={`cont-badge cont-badge--${estadoColor[c._estado]}`}>
-                        {c._estado.charAt(0).toUpperCase() + c._estado.slice(1)}
+                      <span className={`cont-badge cont-badge--${estadoColor[c.estado] ?? 'gray'}`}>
+                        {ESTADO_LABELS[c.estado] ?? c.estado}
                       </span>
                     </td>
                     <td>
                       <div className="cont-actions">
-                        <button 
-                          type="button" 
-                          className="cont-action-btn" 
-                          title="Ver detalle del contrato"
-                          aria-label={`Ver detalle del contrato de ${c.trabajadorNombre}`}
-                          onClick={() => alert('Funcionalidad de ver contrato en desarrollo')}
-                        >
-                          Ver detalle
-                        </button>
-                        {c.activo && (
+                        {c.documentoFirmado && (
+                          <button
+                            type="button"
+                            className="cont-action-btn"
+                            title="Ver el contrato firmado en PDF"
+                            aria-label={`Ver detalle del contrato de ${c.trabajadorNombre}`}
+                            onClick={() => handleVerDetalle(c.id)}
+                          >
+                            Ver detalle
+                          </button>
+                        )}
+                        {c.estado === 'FIRMADO' && (
                           <button
                             type="button"
                             className="cont-action-btn cont-action-btn--danger"
