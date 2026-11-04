@@ -5,6 +5,7 @@ import { getToken } from '../../../../services/httpClient'
 import AdminSidebar, { type AdminSection } from '../../../../components/AdminSidebar'
 import Trabajadores from './trabajadores'
 import Contratos from './contratos'
+import MiContrato from './miContrato'
 import Asistencia from './asistencia'
 import Inasistencia from './inasistencia'
 import Notificaciones from './notificaciones'
@@ -25,6 +26,7 @@ const sectionTitles: Record<AdminSection, string> = {
   resumen: 'Resumen general',
   trabajadores: 'Trabajadores',
   contratos: 'Contratos',
+  'mi-contrato': 'Mi contrato',
   asistencia: 'Asistencia',
   ausencias: 'Ausencias / Inasistencias',
   notificaciones: 'Notificaciones',
@@ -99,6 +101,8 @@ function Dashboard() {
         return <Trabajadores />
       case 'contratos':
         return <Contratos />
+      case 'mi-contrato':
+        return <MiContrato />
       case 'asistencia':
         return <Asistencia />
       case 'ausencias':

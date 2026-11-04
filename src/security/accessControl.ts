@@ -2,6 +2,7 @@ export type SidebarSection =
   | 'resumen'
   | 'trabajadores'
   | 'contratos'
+  | 'mi-contrato'
   | 'asistencia'
   | 'ausencias'
   | 'notificaciones'
@@ -36,8 +37,8 @@ const permissions: Record<string, SidebarSection[]> = {
   OPERADOR_SAAS: ['plataforma'],
   SUPERADMIN: ['resumen', 'trabajadores', 'contratos', 'asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'configuracion-roles', 'seguridad', 'facturacion', 'aspecto', 'idioma', 'accesibilidad'],
   ADMIN_RRHH: ['resumen', 'trabajadores', 'contratos', 'asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'configuracion-roles', 'seguridad', 'facturacion', 'aspecto', 'idioma', 'accesibilidad'],
-  JEFATURA: ['trabajadores', 'asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'seguridad', 'aspecto', 'idioma', 'accesibilidad'],
-  TRABAJADOR: ['asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'seguridad', 'aspecto', 'idioma', 'accesibilidad'],
+  JEFATURA: ['trabajadores', 'mi-contrato', 'asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'seguridad', 'aspecto', 'idioma', 'accesibilidad'],
+  TRABAJADOR: ['mi-contrato', 'asistencia', 'ausencias', 'notificaciones', 'configuracion', 'configuracion-cuenta', 'seguridad', 'aspecto', 'idioma', 'accesibilidad'],
 }
 
 export function normalizeRole(role: string | null | undefined): string {

@@ -371,3 +371,59 @@
   font-size: 0.88rem;
   text-align: center;
 }
+
+/* Contrato desde plantilla: visor PDF y "Mi contrato" */
+.cont-pdf-viewer {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  border: 1px solid #e2edf3;
+  border-radius: 10px;
+  background: #f8fbfd;
+  margin-bottom: 16px;
+}
+
+.campo-error {
+  display: block;
+  color: #ad4545 !important;
+  margin-top: 4px;
+}
+
+.mi-contrato {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mi-contrato__estado {
+  color: #4a6476;
+  background: white;
+  border: 1px solid #e2edf3;
+  border-radius: 14px;
+  padding: 20px 24px;
+}
+
+.mi-contrato__rrhh {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.mi-contrato__rrhh dt {
+  color: #7890a0;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mi-contrato__rrhh dd {
+  margin: 2px 0 0;
+  color: #12324c;
+  font-weight: 600;
+}
+
+a.btn-primary {
+  text-decoration: none;
+  display: inline-block;
+}
