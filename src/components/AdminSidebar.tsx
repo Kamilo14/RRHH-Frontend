@@ -11,6 +11,7 @@ export type AdminSection =
   | 'resumen'
   | 'trabajadores'
   | 'contratos'
+  | 'mi-contrato'
   | 'asistencia'
   | 'ausencias'
   | 'notificaciones'
@@ -39,6 +40,7 @@ const navigationItems: NavigationItem[] = [
   { id: 'resumen', label: 'Resumen general', icon: '▦' },
   { id: 'trabajadores', label: 'Trabajadores', icon: '♙' },
   { id: 'contratos', label: 'Contratos', icon: '▤' },
+  { id: 'mi-contrato', label: 'Mi contrato', icon: '▤' },
   { id: 'asistencia', label: 'Asistencia', icon: '◷' },
   { id: 'ausencias', label: 'Ausencias', icon: '◌' },
   { id: 'notificaciones', label: 'Notificaciones', icon: '♢' },
