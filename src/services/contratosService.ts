@@ -10,14 +10,24 @@
  *  PATCH /api/v1/contratos/:id                      → actualizar
  *  POST  /api/v1/contratos/:id/finalizar            → finalizar contrato
  *  POST  /api/v1/liquidaciones/calcular             → calcular liquidación
+ *  GET   /api/v1/contratos/plantilla/campos         → campos de la plantilla .docx
+ *  POST  /api/v1/contratos/emitir                   → emitir contrato desde plantilla (RRHH)
+ *  GET   /api/v1/contratos/:id/pdf                  → PDF firmado (RRHH)
+ *  GET   /api/v1/contratos/mio                      → mi contrato (Trabajador / Jefatura)
+ *  PUT   /api/v1/contratos/mio/campos               → guardar mis campos
+ *  GET   /api/v1/contratos/mio/pdf                  → previsualización o PDF firmado
+ *  POST  /api/v1/contratos/mio/aprobar              → aprobar (firma simulada)
+ *  POST  /api/v1/contratos/mio/rechazar             → rechazar con motivo opcional
  */
 
-import { apiRequest, apiPost, apiPatch, type ApiResponse } from './httpClient'
+import { apiRequest, apiPost, apiPatch, apiPut, apiGetBlob, apiPostEmpty, type ApiResponse } from './httpClient'
 import { API_BASE } from './apiConfig'
 
 const BASE = API_BASE
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+
+export type EstadoContrato = 'PENDIENTE_FIRMA' | 'FIRMADO' | 'RECHAZADO' | 'FINALIZADO'
 
 export interface ContratoResponse {
   id: string
@@ -28,6 +38,26 @@ export interface ContratoResponse {
   fechaInicio: string   // LocalDate → "YYYY-MM-DD"
   fechaTermino: string | null
   activo: boolean
+  estado: EstadoContrato
+  jornadaHorasSemanales: number | null
+  documentoFirmado: boolean
+}
+
+export interface CampoPlantilla {
+  clave: string
+  etiqueta: string
+  responsable: 'RRHH' | 'TRABAJADOR'
+  tipo: 'TEXTO' | 'NUMERO' | 'ENTERO' | 'FECHA' | 'OPCION'
+  opciones: string[]
+  obligatorio: boolean
+}
+
+export interface MiContrato {
+  estado: 'SIN_CONTRATO' | 'EN_ESPERA' | 'FIRMADO'
+  contrato: ContratoResponse | null
+  camposRrhh: Record<string, string>
+  camposTrabajador: Record<string, string>
+  documentoListo: boolean
 }
 
 export interface LiquidacionResponse {
@@ -123,6 +153,79 @@ export async function calcularLiquidacion(
   return res.datos
 }
 
+/** Campos de la plantilla de contrato, en orden de aparición */
+export async function obtenerCamposPlantilla(): Promise<CampoPlantilla[]> {
+  const res = await apiRequest<ApiResponse<CampoPlantilla[]>>(`${BASE}/contratos/plantilla/campos`)
+  return res.datos.map((c) => ({ ...c, opciones: c.opciones ?? [] }))
+}
+
+/** Emite un contrato desde la plantilla con los campos de RRHH; queda en espera de firma */
+export async function emitirContrato(
+  trabajadorId: string,
+  campos: Record<string, string>
+): Promise<ContratoResponse> {
+  const res = await apiPost<ApiResponse<ContratoApiResponse>>(`${BASE}/contratos/emitir`, {
+    trabajador_id: trabajadorId,
+    campos,
+  })
+  return normalizarContrato(res.datos)
+}
+
+/** PDF firmado de un contrato (vista del admin) */
+export async function obtenerContratoPdf(id: string): Promise<Blob> {
+  return apiGetBlob(`${BASE}/contratos/${id}/pdf`)
+}
+
+/** Estado del contrato del trabajador autenticado */
+export async function obtenerMiContrato(): Promise<MiContrato> {
+  const res = await apiRequest<ApiResponse<MiContratoApiResponse>>(`${BASE}/contratos/mio`)
+  return normalizarMiContrato(res.datos)
+}
+
+/** Guarda los campos del trabajador y genera el documento para previsualizar */
+export async function guardarMisCampos(campos: Record<string, string>): Promise<MiContrato> {
+  const res = await apiPut<ApiResponse<MiContratoApiResponse>>(`${BASE}/contratos/mio/campos`, { campos })
+  return normalizarMiContrato(res.datos)
+}
+
+/** PDF de mi contrato: previsualización en espera, documento guardado si está firmado */
+export async function obtenerMiContratoPdf(): Promise<Blob> {
+  return apiGetBlob(`${BASE}/contratos/mio/pdf`)
+}
+
+/** Aprueba mi contrato en espera; queda firmado */
+export async function aprobarMiContrato(): Promise<MiContrato> {
+  const res = await apiPostEmpty<ApiResponse<MiContratoApiResponse>>(`${BASE}/contratos/mio/aprobar`)
+  return normalizarMiContrato(res.datos)
+}
+
+/** Rechaza mi contrato en espera, con un motivo opcional */
+export async function rechazarMiContrato(motivo?: string): Promise<MiContrato> {
+  const res = await apiPostEmpty<ApiResponse<MiContratoApiResponse>>(`${BASE}/contratos/mio/rechazar`, { motivo })
+  return normalizarMiContrato(res.datos)
+}
+
+interface MiContratoApiResponse {
+  estado: MiContrato['estado']
+  contrato?: ContratoApiResponse | null
+  campos_rrhh?: Record<string, string> | null
+  camposRrhh?: Record<string, string> | null
+  campos_trabajador?: Record<string, string> | null
+  camposTrabajador?: Record<string, string> | null
+  documento_listo?: boolean
+  documentoListo?: boolean
+}
+
+function normalizarMiContrato(mio: MiContratoApiResponse): MiContrato {
+  return {
+    estado: mio.estado,
+    contrato: mio.contrato ? normalizarContrato(mio.contrato) : null,
+    camposRrhh: mio.camposRrhh ?? mio.campos_rrhh ?? {},
+    camposTrabajador: mio.camposTrabajador ?? mio.campos_trabajador ?? {},
+    documentoListo: mio.documentoListo ?? mio.documento_listo ?? false,
+  }
+}
+
 interface ContratoApiResponse {
   id: string
   tenant_id?: string
@@ -138,6 +241,11 @@ interface ContratoApiResponse {
   fecha_termino?: string | null
   fechaTermino?: string | null
   activo: boolean
+  estado?: EstadoContrato
+  jornada_horas_semanales?: number | null
+  jornadaHorasSemanales?: number | null
+  documento_firmado?: boolean
+  documentoFirmado?: boolean
 }
 
 function normalizarContrato(contrato: ContratoApiResponse): ContratoResponse {
@@ -150,5 +258,8 @@ function normalizarContrato(contrato: ContratoApiResponse): ContratoResponse {
     fechaInicio: contrato.fechaInicio ?? contrato.fecha_inicio ?? '',
     fechaTermino: contrato.fechaTermino ?? contrato.fecha_termino ?? null,
     activo: contrato.activo,
+    estado: contrato.estado ?? (contrato.activo ? 'FIRMADO' : 'FINALIZADO'),
+    jornadaHorasSemanales: contrato.jornadaHorasSemanales ?? contrato.jornada_horas_semanales ?? null,
+    documentoFirmado: contrato.documentoFirmado ?? contrato.documento_firmado ?? false,
   }
 }
