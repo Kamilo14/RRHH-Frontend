@@ -22,3 +22,8 @@
 .notif-state--error { color: #a34a4a; background: #fffafa; border-color: #f0d3d3; }
 .notif-state button { margin-left: 8px; border: 0; color: inherit; background: transparent; cursor: pointer; font: inherit; font-weight: 700; text-decoration: underline; }
 @media (max-width: 620px) { .notif-item { grid-template-columns: 3px 1fr; } .notif-item__action { grid-column: 2; justify-self: start; } }
+/* Notificaciones con destino: toda el área de contenido es clicable */
+.notif-item--link .notif-item__content { cursor: pointer; border-radius: 6px; }
+.notif-item--link:hover { background: #f4f9fc; }
+.notif-item--link .notif-item__content:focus-visible { outline: 2px solid #2382ad; outline-offset: 4px; }
+.notif-item__goto { display: inline-block; margin-top: 6px; color: #147eaf; font-size: .72rem; font-weight: 700; }

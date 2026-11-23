@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../../../context/AuthContext'
 import { listarNotificaciones, marcarLeida } from '../../../../services/notificacionesService'
+import { NOMBRE_SECCION, seccionDestino } from '../../../../utils/notificacionesNavegacion'
 import '../../../../styles/notificaciones.css'
 
 function fechaRelativa(fecha) {
@@ -18,7 +20,8 @@ function etiquetaCanal(canal) {
   return nombres[canal?.toUpperCase()] ?? canal ?? 'Plataforma'
 }
 
-function Notificaciones({ onChange }) {
+function Notificaciones({ onChange, onNavigate }) {
+  const { user } = useAuth()
   const [notificaciones, setNotificaciones] = useState([])
   const [filtro, setFiltro] = useState('todas')
   const [loading, setLoading] = useState(true)
@@ -54,6 +57,19 @@ function Notificaciones({ onChange }) {
     }
   }
 
+  async function abrir(notificacion, destino) {
+    if (notificacion.estado === 'PENDIENTE') {
+      try {
+        const actualizada = await marcarLeida(notificacion.id, { leido: true })
+        setNotificaciones((actuales) => actuales.map((item) => item.id === actualizada.id ? actualizada : item))
+        onChange?.()
+      } catch {
+        // No bloquea la redirección: la notificación queda como no leída.
+      }
+    }
+    onNavigate?.(destino)
+  }
+
   return (
     <section className="notif-page">
       <div className="notif-toolbar">
@@ -72,13 +88,25 @@ function Notificaciones({ onChange }) {
         <div className="notif-list">
           {visibles.map((notificacion) => {
             const pendiente = notificacion.estado === 'PENDIENTE'
+            const destino = onNavigate ? seccionDestino(notificacion.tipoEvento, user?.role) : null
+            const abrirDestino = destino ? () => abrir(notificacion, destino) : undefined
             return (
-              <article key={notificacion.id} className={`notif-item${pendiente ? ' notif-item--unread' : ''}`}>
+              <article key={notificacion.id} className={`notif-item${pendiente ? ' notif-item--unread' : ''}${destino ? ' notif-item--link' : ''}`}>
                 <div className="notif-item__indicator" aria-hidden="true" />
-                <div className="notif-item__content">
+                <div
+                  className="notif-item__content"
+                  {...(destino && {
+                    role: 'link',
+                    tabIndex: 0,
+                    'aria-label': `${notificacion.asunto}. Ir a ${NOMBRE_SECCION[destino]}`,
+                    onClick: abrirDestino,
+                    onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); abrirDestino() } },
+                  })}
+                >
                   <div className="notif-item__meta"><span>{etiquetaCanal(notificacion.canal)}</span><time dateTime={notificacion.creadoEn}>{fechaRelativa(notificacion.creadoEn)}</time></div>
                   <h2>{notificacion.asunto}</h2>
                   <p>{notificacion.cuerpo}</p>
+                  {destino && <span className="notif-item__goto">Ir a {NOMBRE_SECCION[destino]} →</span>}
                 </div>
                 <button type="button" className="notif-item__action" onClick={() => cambiarLectura(notificacion)}>
                   {pendiente ? 'Marcar como leída' : 'Marcar como no leída'}

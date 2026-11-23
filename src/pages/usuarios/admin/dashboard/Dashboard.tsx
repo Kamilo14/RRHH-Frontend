@@ -111,7 +111,7 @@ function Dashboard() {
       case 'ausencias':
         return <Inasistencia />
       case 'notificaciones':
-        return <Notificaciones onChange={() => setNotificationRefreshKey((current) => current + 1)} />
+        return <Notificaciones onChange={() => setNotificationRefreshKey((current) => current + 1)} onNavigate={setActiveSection} />
       case 'configuracion':
         return <Configuracion onSectionChange={setActiveSection} onBack={() => setActiveSection('resumen')} />
       case 'configuracion-roles':
