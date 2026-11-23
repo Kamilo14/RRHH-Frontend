@@ -9,6 +9,7 @@ describe('seccionDestino', () => {
     ['contrato.creado', 'contratos'],
     ['contrato.finalizado', 'contratos'],
     ['asistencia.editada', 'asistencia'],
+    ['acceso.solicitado', 'trabajadores'],
   ])('%s lleva a %s para Admin de RRHH', (evento, seccion) => {
     expect(seccionDestino(evento, 'Admin de RRHH')).toBe(seccion)
   })
@@ -28,6 +29,10 @@ describe('seccionDestino', () => {
 
   it.each([null, undefined, '', 'evento.desconocido', 'sinpunto'])('tipo %s no tiene destino', (tipo) => {
     expect(seccionDestino(tipo, 'Admin de RRHH')).toBeNull()
+  })
+
+  it('una solicitud de acceso no lleva a un Trabajador', () => {
+    expect(seccionDestino('acceso.solicitado', 'Trabajador')).toBeNull()
   })
 
   it('sin rol no hay destino', () => {
