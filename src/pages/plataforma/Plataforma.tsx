@@ -12,6 +12,7 @@ import {
   type TenantResumen,
 } from '../../services/identityService'
 import { normalizeRole } from '../../security/accessControl'
+import DetalleEmpresa from './DetalleEmpresa'
 import '../../styles/trabajadores.css'
 
 type Pestana = 'empresas' | 'usuarios'
@@ -28,7 +29,10 @@ function mensajeDe(error: unknown, porDefecto: string): string {
   return error instanceof Error && error.message ? error.message : porDefecto
 }
 
-/** Consola de plataforma (S2, S6): AdminPlataforma revisa empresas y crea cuentas; OperadorSaaS solo lee. */
+/**
+ * Consola de plataforma (ADR-020): AdminPlataforma revisa empresas, crea cuentas y administra grupos; AdminPlataforma
+ * y OperadorSaaS (en las empresas de sus grupos) gestionan integrantes, roles, suspensión y mensajes.
+ */
 function Plataforma() {
   const { user } = useAuth()
   const oidcAuth = useOidcAuth()
@@ -78,7 +82,8 @@ function Plataforma() {
 }
 
 function Empresas({ esAdmin }: { esAdmin: boolean }) {
-  const [estado, setEstado] = useState('PENDIENTE_ACTIVACION')
+  // S1: la consola abre con todas las empresas; el filtro sigue disponible.
+  const [estado, setEstado] = useState('')
   const [empresas, setEmpresas] = useState<TenantResumen[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -86,6 +91,7 @@ function Empresas({ esAdmin }: { esAdmin: boolean }) {
   const [rechazando, setRechazando] = useState<TenantResumen | null>(null)
   const [motivo, setMotivo] = useState('')
   const [procesando, setProcesando] = useState<string | null>(null)
+  const [detalle, setDetalle] = useState<TenantResumen | null>(null)
 
   useEffect(() => {
     let cancelado = false
@@ -98,6 +104,15 @@ function Empresas({ esAdmin }: { esAdmin: boolean }) {
 
   const reemplazar = (actualizada: TenantResumen) => {
     setEmpresas((lista) => lista.map((empresa) => (empresa.id === actualizada.id ? { ...empresa, ...actualizada } : empresa)))
+    setDetalle((actual) => (actual && actual.id === actualizada.id ? { ...actual, ...actualizada } : actual))
+  }
+
+  if (detalle) {
+    return (
+      <section role="tabpanel">
+        <DetalleEmpresa empresa={detalle} onCambio={reemplazar} onCerrar={() => setDetalle(null)} />
+      </section>
+    )
   }
 
   const activar = (empresa: TenantResumen) => {
@@ -174,22 +189,31 @@ function Empresas({ esAdmin }: { esAdmin: boolean }) {
                 <th>Empresa</th>
                 <th>RUT</th>
                 <th>Registrada por</th>
+                <th>Grupo</th>
                 <th>Estado</th>
-                {esAdmin && <th>Acciones</th>}
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {empresas.length === 0 ? (
-                <tr><td className="trab-table__empty" colSpan={esAdmin ? 5 : 4}>No hay empresas en este estado.</td></tr>
+                <tr><td className="trab-table__empty" colSpan={6}>No hay empresas en este estado.</td></tr>
               ) : empresas.map((empresa) => (
                 <tr key={empresa.id}>
                   <td>{empresa.nombreEmpresa}</td>
                   <td className="trab-table__rut">{empresa.rutEmpresa ?? '—'}</td>
                   <td>{empresa.registradoPorEmail ?? '—'}</td>
+                  <td>{empresa.grupo ?? 'Sin grupo'}</td>
                   <td>{empresa.estado}</td>
-                  {esAdmin && (
-                    <td className="trab-table__actions">
-                      {empresa.estado === 'PENDIENTE_ACTIVACION' && (
+                  <td className="trab-table__actions">
+                    <button
+                      type="button"
+                      className="trab-action-btn"
+                      aria-label={`Gestionar ${empresa.nombreEmpresa}`}
+                      onClick={() => { setError(''); setAviso(''); setDetalle(empresa) }}
+                    >
+                      Gestionar
+                    </button>
+                    {esAdmin && empresa.estado === 'PENDIENTE_ACTIVACION' && (
                         <>
                           <button
                             type="button"
@@ -210,9 +234,8 @@ function Empresas({ esAdmin }: { esAdmin: boolean }) {
                             Rechazar
                           </button>
                         </>
-                      )}
-                    </td>
-                  )}
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

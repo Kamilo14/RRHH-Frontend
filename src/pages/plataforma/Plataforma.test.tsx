@@ -17,6 +17,9 @@ vi.mock('react-oidc-context', () => ({ useAuth: () => ({ removeUser: mocks.remov
 vi.mock('../../config/oidcConfig', () => ({ signOutRedirect: mocks.signOutRedirect }))
 vi.mock('../../services/tokenStorage', () => ({ clearAuth: mocks.clearAuth }))
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, logout: mocks.logout }) }))
+vi.mock('./DetalleEmpresa', () => ({
+  default: ({ empresa }: { empresa: { nombreEmpresa: string } }) => <div>Detalle {empresa.nombreEmpresa}</div>,
+}))
 vi.mock('../../services/identityService', () => ({
   listarEmpresasPlataforma: mocks.listar,
   activarEmpresa: mocks.activar,
@@ -44,13 +47,43 @@ describe('Plataforma', () => {
     expect(mocks.removeUser).toHaveBeenCalled()
   })
 
-  it('lista las empresas pendientes por defecto y filtra por estado', async () => {
+  it('listaTodasPorDefecto y filtra por estado', async () => {
     mocks.user.role = 'AdminPlataforma'; mocks.listar.mockResolvedValue([empresa])
     render(<Plataforma />)
     expect(await screen.findByText('Acme')).toBeTruthy()
-    expect(mocks.listar).toHaveBeenCalledWith('PENDIENTE_ACTIVACION')
-    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: '' } })
-    await waitFor(() => expect(mocks.listar).toHaveBeenLastCalledWith(undefined))
+    expect(mocks.listar).toHaveBeenCalledWith(undefined)
+    expect((screen.getByLabelText('Estado') as HTMLSelectElement).value).toBe('')
+    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'PENDIENTE_ACTIVACION' } })
+    await waitFor(() => expect(mocks.listar).toHaveBeenLastCalledWith('PENDIENTE_ACTIVACION'))
+  })
+
+  it('muestraSinGrupo', async () => {
+    mocks.user.role = 'AdminPlataforma'
+    mocks.listar.mockResolvedValue([{ ...empresa, grupo: null }, { ...empresa, id: 't-8', nombreEmpresa: 'Beta', grupo: 'Sur' }])
+    render(<Plataforma />)
+    expect(await screen.findByText('Sin grupo')).toBeTruthy()
+    expect(screen.getByText('Sur')).toBeTruthy()
+  })
+
+  it('operadorSinEmpresasVeListaVacia', async () => {
+    mocks.user.role = 'OperadorSaaS'; mocks.listar.mockResolvedValue([])
+    render(<Plataforma />)
+    expect(await screen.findByText('No hay empresas en este estado.')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('operadorVeGestionarPeroNoActivar', async () => {
+    mocks.user.role = 'OperadorSaaS'; mocks.listar.mockResolvedValue([empresa])
+    render(<Plataforma />)
+    expect(await screen.findByRole('button', { name: 'Gestionar Acme' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Activar Acme' })).toBeNull()
+  })
+
+  it('gestionar abre el detalle de la empresa', async () => {
+    mocks.user.role = 'AdminPlataforma'; mocks.listar.mockResolvedValue([empresa])
+    render(<Plataforma />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Gestionar Acme' }))
+    expect(await screen.findByText('Detalle Acme')).toBeTruthy()
   })
 
   it('admin plataforma activa una empresa pendiente', async () => {
