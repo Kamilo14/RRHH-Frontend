@@ -173,4 +173,9 @@ describe('identityService', () => {
     expect(await enviarMensajeEmpresa('t-1', 'A', 'B')).toBe(2)
     expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/mensajes$/), { asunto: 'A', cuerpo: 'B' })
   })
+
+  it('cambiarRolIntegrante conserva cognito_error', async () => {
+    mocks.apiPatch.mockResolvedValue({ datos: { id: 'u-1', tenant_id: 't-1', email: 't@x.cl', nombre: 'T', rol: 'Jefatura', estado: 'ACTIVO', cognito_error: 'AccessDeniedException' } })
+    expect((await cambiarRolIntegrante('t-1', 'u-1', 'Jefatura')).cognitoError).toBe('AccessDeniedException')
+  })
 })

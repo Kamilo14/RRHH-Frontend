@@ -25,6 +25,7 @@ const empresa = {
 }
 const persona = (id: string, rol: string, estado = 'ACTIVO') => ({
   id, tenantId: 't-1', email: `${id}@x.cl`, nombre: id, rol, estado, trabajadorId: null, cognitoSub: null, contrasenaTemporal: null,
+  cognitoError: null as string | null,
 })
 
 function renderDetalle(estado = 'ACTIVO') {
@@ -107,5 +108,28 @@ describe('DetalleEmpresa', () => {
     fireEvent.change(within(form).getByLabelText('Cuerpo'), { target: { value: 'Hola 2' } })
     fireEvent.click(enviar)
     expect(await within(form).findByText('La empresa no tiene un Admin de RRHH ni un SuperAdmin activo')).toBeTruthy()
+  })
+
+  it('avisaSiCognitoFallaAlCambiarElRol', async () => {
+    mocks.integrantes.mockResolvedValue([persona('u-1', 'Trabajador')])
+    mocks.cambiarRol.mockResolvedValue({ ...persona('u-1', 'Jefatura'), cognitoError: 'AccessDeniedException' })
+    renderDetalle()
+    fireEvent.change(await screen.findByLabelText('Rol de u-1@x.cl'), { target: { value: 'Jefatura' } })
+    expect(await screen.findByText(/AccessDeniedException/)).toBeTruthy()
+    expect(screen.queryByText(/próximo inicio de sesión/)).toBeNull()
+  })
+
+  it('avisaSiCognitoFallaAlSuspenderOReactivar', async () => {
+    mocks.integrantes.mockResolvedValue([])
+    mocks.reactivar.mockResolvedValue({ ...empresa, estado: 'ACTIVO', cognitoError: 'UserNotFoundException' })
+    renderDetalle('SUSPENDIDO')
+    fireEvent.click(await screen.findByRole('button', { name: 'Reactivar empresa' }))
+    expect(await screen.findByText(/UserNotFoundException/)).toBeTruthy()
+    cleanup()
+    mocks.suspender.mockResolvedValue({ ...empresa, estado: 'SUSPENDIDO', cognitoError: 'AccessDeniedException' })
+    renderDetalle('ACTIVO')
+    fireEvent.change(await screen.findByLabelText('Motivo de la suspensión'), { target: { value: 'Impago' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Suspender empresa' }))
+    expect(await screen.findByText(/AccessDeniedException/)).toBeTruthy()
   })
 })

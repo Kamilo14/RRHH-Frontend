@@ -70,6 +70,8 @@ export interface UsuarioResponse {
   trabajadorId: string | null
   cognitoSub: string | null
   contrasenaTemporal: string | null
+  /** Error de Cognito al sincronizar la cuenta (rol, claims), o null si se sincronizó. */
+  cognitoError?: string | null
 }
 
 export interface TenantResolverResponse {
@@ -423,6 +425,7 @@ interface UsuarioResponseApi {
   cognitoSub?: string | null
   contrasena_temporal?: string | null
   contrasenaTemporal?: string | null
+  cognito_error?: string | null
 }
 
 function normalizarTenant(tenant: TenantResumenApi): TenantResumen {
@@ -460,5 +463,6 @@ function normalizarUsuario(usuario: UsuarioResponseApi): UsuarioResponse {
     trabajadorId: usuario.trabajadorId ?? usuario.trabajador_id ?? null,
     cognitoSub: usuario.cognitoSub ?? usuario.cognito_sub ?? null,
     contrasenaTemporal: usuario.contrasenaTemporal ?? usuario.contrasena_temporal ?? null,
+    cognitoError: usuario.cognito_error ?? null,
   }
 }

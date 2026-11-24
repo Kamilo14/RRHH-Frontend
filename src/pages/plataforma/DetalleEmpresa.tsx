@@ -52,7 +52,9 @@ function DetalleEmpresa({ empresa, onCambio, onCerrar }: Props) {
     void cambiarRolIntegrante(empresa.id, persona.id, rol)
       .then((actualizado) => {
         setIntegrantes((lista) => lista.map((p) => (p.id === persona.id ? { ...p, rol: actualizado.rol } : p)))
-        setAviso(`${persona.email} ahora es ${actualizado.rol}. El cambio se ve en su próximo inicio de sesión.`)
+        setAviso(actualizado.cognitoError
+          ? `${persona.email} ahora es ${actualizado.rol} en la base, pero no se pudo actualizar su rol en Cognito: ${actualizado.cognitoError}. Al volver a entrar seguirá con el rol anterior.`
+          : `${persona.email} ahora es ${actualizado.rol}. El cambio se ve en su próximo inicio de sesión.`)
       })
       .catch((rolError) => setError(mensajeDe(rolError, 'No se pudo cambiar el rol.')))
       .finally(() => setCambiando(null))
@@ -118,11 +120,20 @@ function DetalleEmpresa({ empresa, onCambio, onCerrar }: Props) {
 function Suspension({ empresa, onCambio }: { empresa: TenantResumen; onCambio: (e: TenantResumen) => void }) {
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState('')
+  const [aviso, setAviso] = useState('')
   const [procesando, setProcesando] = useState(false)
+
+  /** Avisa si Cognito no pudo deshabilitar o habilitar las cuentas de la empresa (S6). */
+  const avisarCognito = (actualizada: TenantResumen, accion: string) => {
+    setAviso(actualizada.cognitoError
+      ? `La empresa quedó ${accion}, pero Cognito no pudo actualizar sus cuentas: ${actualizada.cognitoError}`
+      : '')
+  }
 
   const suspender = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
+    setAviso('')
     const limpio = motivo.trim()
     if (!limpio) {
       setError('Indica el motivo de la suspensión.')
@@ -134,32 +145,37 @@ function Suspension({ empresa, onCambio }: { empresa: TenantResumen; onCambio: (
     }
     setProcesando(true)
     void suspenderEmpresa(empresa.id, limpio)
-      .then((actualizada) => { setMotivo(''); onCambio(actualizada) })
+      .then((actualizada) => { setMotivo(''); avisarCognito(actualizada, 'suspendida'); onCambio(actualizada) })
       .catch((suspenderError) => setError(mensajeDe(suspenderError, 'No se pudo suspender la empresa.')))
       .finally(() => setProcesando(false))
   }
 
   const reactivar = () => {
     setError('')
+    setAviso('')
     setProcesando(true)
     void reactivarEmpresa(empresa.id)
-      .then(onCambio)
+      .then((actualizada) => { avisarCognito(actualizada, 'activa'); onCambio(actualizada) })
       .catch((reactivarError) => setError(mensajeDe(reactivarError, 'No se pudo reactivar la empresa.')))
       .finally(() => setProcesando(false))
   }
 
+  const avisoCognito = aviso && <div className="trab-state trab-state--error" role="status">{aviso}</div>
+
   if (empresa.estado === 'SUSPENDIDO') {
     return (
       <div className="form-actions">
+        {avisoCognito}
         {error && <div className="form-error" role="alert">{error}</div>}
         <button type="button" className="btn-primary" disabled={procesando} onClick={reactivar}>Reactivar empresa</button>
       </div>
     )
   }
-  if (empresa.estado !== 'ACTIVO') return null
+  if (empresa.estado !== 'ACTIVO') return avisoCognito || null
   return (
     <form onSubmit={suspender} noValidate>
       <h3>Suspender</h3>
+      {avisoCognito}
       {error && <div className="form-error" role="alert">{error}</div>}
       <label htmlFor="motivoSuspension">Motivo de la suspensión</label>
       <textarea id="motivoSuspension" maxLength={MAX_MOTIVO} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
