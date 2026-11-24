@@ -8,16 +8,13 @@ import {
   type TenantResumen,
   type UsuarioResponse,
 } from '../../services/identityService'
+import { insigniaEstado, mensajeDe } from './estadoEmpresa'
 
 /** Roles que la plataforma puede asignar a un integrante (S5): nunca SuperAdmin. */
 const ROLES_ASIGNABLES = ['Admin de RRHH', 'Jefatura', 'Trabajador']
 const MAX_MOTIVO = 500
 const MAX_ASUNTO = 100
 const MAX_CUERPO = 4000
-
-function mensajeDe(error: unknown, porDefecto: string): string {
-  return error instanceof Error && error.message ? error.message : porDefecto
-}
 
 interface Props {
   empresa: TenantResumen
@@ -60,59 +57,80 @@ function DetalleEmpresa({ empresa, onCambio, onCerrar }: Props) {
       .finally(() => setCambiando(null))
   }
 
+  const insignia = insigniaEstado(empresa.estado)
+
   return (
-    <section className="form-card">
-      <div className="trab-toolbar">
-        <div className="trab-toolbar__left">
-          <h2>{empresa.nombreEmpresa}</h2>
-          <span>{empresa.estado}{empresa.grupo ? ` · ${empresa.grupo}` : ''}</span>
+    <section className="trab-page">
+      <div className="plat-card">
+        <div className="plat-detail-header">
+          <div>
+            <h2>{empresa.nombreEmpresa}</h2>
+            <div className="plat-detail-header__meta">
+              <span className={insignia.clase}>{insignia.texto}</span>
+              <span>{empresa.grupo ? `Grupo ${empresa.grupo}` : 'Sin grupo'}</span>
+              {empresa.rutEmpresa && <span>RUT {empresa.rutEmpresa}</span>}
+            </div>
+          </div>
+          <button type="button" className="btn-secondary" onClick={onCerrar}>← Volver a empresas</button>
         </div>
-        <button type="button" className="btn-secondary" onClick={onCerrar}>Volver a empresas</button>
       </div>
-      {error && <div className="trab-state trab-state--error" role="alert">{error}</div>}
-      {aviso && <div className="trab-state" role="status">{aviso}</div>}
 
-      <h3>Integrantes</h3>
-      {cargando ? (
-        <div className="trab-state">Cargando integrantes…</div>
-      ) : (
-        <div className="trab-table-wrap">
-          <table className="trab-table">
-            <thead>
-              <tr><th>Correo</th><th>Nombre</th><th>Rol</th><th>Estado</th></tr>
-            </thead>
-            <tbody>
-              {integrantes.length === 0 ? (
-                <tr><td className="trab-table__empty" colSpan={4}>La empresa no tiene integrantes.</td></tr>
-              ) : integrantes.map((persona) => {
-                const editable = persona.estado === 'ACTIVO' && persona.rol !== 'SuperAdmin'
-                return (
-                  <tr key={persona.id}>
-                    <td>{persona.email}</td>
-                    <td>{persona.nombre ?? '—'}</td>
-                    <td>
-                      {editable ? (
-                        <select
-                          aria-label={`Rol de ${persona.email}`}
-                          value={persona.rol}
-                          disabled={cambiando === persona.id}
-                          onChange={(event) => cambiarRol(persona, event.target.value)}
-                        >
-                          {ROLES_ASIGNABLES.map((rol) => <option key={rol} value={rol}>{rol}</option>)}
-                        </select>
-                      ) : (persona.rol ?? '—')}
-                    </td>
-                    <td>{persona.estado}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      {error && <div className="plat-notice plat-notice--error" role="alert">{error}</div>}
+      {aviso && <div className="plat-notice" role="status">{aviso}</div>}
+
+      <div className="plat-card">
+        <div>
+          <h3>Integrantes</h3>
+          <p>El rol de un SuperAdmin o de una cuenta que no está activa no se cambia desde aquí.</p>
         </div>
-      )}
+        {cargando ? (
+          <div className="trab-state">Cargando integrantes…</div>
+        ) : (
+          <div className="trab-table-wrap">
+            <table className="trab-table">
+              <thead>
+                <tr><th>Correo</th><th>Nombre</th><th>Rol</th><th>Estado</th></tr>
+              </thead>
+              <tbody>
+                {integrantes.length === 0 ? (
+                  <tr><td className="trab-table__empty" colSpan={4}>La empresa no tiene integrantes.</td></tr>
+                ) : integrantes.map((persona) => {
+                  const editable = persona.estado === 'ACTIVO' && persona.rol !== 'SuperAdmin'
+                  return (
+                    <tr key={persona.id}>
+                      <td>{persona.email}</td>
+                      <td>{persona.nombre ?? '—'}</td>
+                      <td>
+                        {editable ? (
+                          <select
+                            className="plat-table-select"
+                            aria-label={`Rol de ${persona.email}`}
+                            value={persona.rol}
+                            disabled={cambiando === persona.id}
+                            onChange={(event) => cambiarRol(persona, event.target.value)}
+                          >
+                            {ROLES_ASIGNABLES.map((rol) => <option key={rol} value={rol}>{rol}</option>)}
+                          </select>
+                        ) : (persona.rol ?? '—')}
+                      </td>
+                      <td>
+                        <span className={persona.estado === 'ACTIVO' ? 'trab-badge trab-badge--activo' : 'trab-badge trab-badge--neutro'}>
+                          {persona.estado}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-      <Suspension empresa={empresa} onCambio={onCambio} />
-      <Mensaje empresa={empresa} />
+      <div className="plat-grid-2">
+        <Suspension empresa={empresa} onCambio={onCambio} />
+        <Mensaje empresa={empresa} />
+      </div>
     </section>
   )
 }
@@ -160,27 +178,49 @@ function Suspension({ empresa, onCambio }: { empresa: TenantResumen; onCambio: (
       .finally(() => setProcesando(false))
   }
 
-  const avisoCognito = aviso && <div className="trab-state trab-state--error" role="status">{aviso}</div>
+  const avisoCognito = aviso && <div className="plat-notice plat-notice--warning" role="status">{aviso}</div>
 
   if (empresa.estado === 'SUSPENDIDO') {
     return (
-      <div className="form-actions">
+      <div className="plat-card">
+        <div>
+          <h3>Empresa suspendida</h3>
+          <p>Sus usuarios no pueden entrar. Al reactivarla vuelven a tener acceso; sus datos se conservan.</p>
+        </div>
         {avisoCognito}
-        {error && <div className="form-error" role="alert">{error}</div>}
-        <button type="button" className="btn-primary" disabled={procesando} onClick={reactivar}>Reactivar empresa</button>
+        {error && <div className="plat-notice plat-notice--error" role="alert">{error}</div>}
+        <div className="plat-card__actions">
+          <button type="button" className="btn-primary" disabled={procesando} onClick={reactivar}>Reactivar empresa</button>
+        </div>
       </div>
     )
   }
-  if (empresa.estado !== 'ACTIVO') return avisoCognito || null
+  if (empresa.estado !== 'ACTIVO') {
+    return (
+      <div className="plat-card">
+        <div>
+          <h3>Suspensión</h3>
+          <p>Solo una empresa activa se puede suspender.</p>
+        </div>
+        {avisoCognito}
+      </div>
+    )
+  }
   return (
-    <form onSubmit={suspender} noValidate>
-      <h3>Suspender</h3>
+    <form className="plat-card" onSubmit={suspender} noValidate>
+      <div>
+        <h3>Suspender empresa</h3>
+        <p>Sus usuarios dejan de entrar de inmediato; los datos se conservan y se puede reactivar.</p>
+      </div>
       {avisoCognito}
-      {error && <div className="form-error" role="alert">{error}</div>}
-      <label htmlFor="motivoSuspension">Motivo de la suspensión</label>
-      <textarea id="motivoSuspension" maxLength={MAX_MOTIVO} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
-      <div className="form-actions">
-        <button type="submit" className="trab-action-btn trab-action-btn--danger" disabled={procesando}>Suspender empresa</button>
+      {error && <div className="plat-notice plat-notice--error" role="alert">{error}</div>}
+      <div className="plat-field">
+        <label htmlFor="motivoSuspension">Motivo de la suspensión</label>
+        <textarea id="motivoSuspension" maxLength={MAX_MOTIVO} value={motivo} onChange={(event) => setMotivo(event.target.value)} />
+        <span className="plat-field__hint">{motivo.trim().length} de {MAX_MOTIVO} caracteres</span>
+      </div>
+      <div className="plat-card__actions">
+        <button type="submit" className="btn-primary" disabled={procesando}>Suspender empresa</button>
       </div>
     </form>
   )
@@ -219,15 +259,23 @@ function Mensaje({ empresa }: { empresa: TenantResumen }) {
   }
 
   return (
-    <form aria-label="Mensaje al Admin de RRHH" onSubmit={enviar} noValidate>
-      <h3>Mensaje al Admin de RRHH</h3>
-      {error && <div className="form-error" role="alert">{error}</div>}
-      {aviso && <div className="trab-state" role="status">{aviso}</div>}
-      <label htmlFor="mensajeAsunto">Asunto</label>
-      <input id="mensajeAsunto" type="text" value={asunto} onChange={(event) => setAsunto(event.target.value)} />
-      <label htmlFor="mensajeCuerpo">Cuerpo</label>
-      <textarea id="mensajeCuerpo" maxLength={MAX_CUERPO} value={cuerpo} onChange={(event) => setCuerpo(event.target.value)} />
-      <div className="form-actions">
+    <form className="plat-card" aria-label="Mensaje al Admin de RRHH" onSubmit={enviar} noValidate>
+      <div>
+        <h3>Mensaje al Admin de RRHH</h3>
+        <p>Llega como notificación en la app y por correo a los Admin de RRHH activos (o al SuperAdmin si no hay).</p>
+      </div>
+      {error && <div className="plat-notice plat-notice--error" role="alert">{error}</div>}
+      {aviso && <div className="plat-notice" role="status">{aviso}</div>}
+      <div className="plat-field">
+        <label htmlFor="mensajeAsunto">Asunto</label>
+        <input id="mensajeAsunto" type="text" maxLength={MAX_ASUNTO} value={asunto} onChange={(event) => setAsunto(event.target.value)} />
+      </div>
+      <div className="plat-field">
+        <label htmlFor="mensajeCuerpo">Cuerpo</label>
+        <textarea id="mensajeCuerpo" maxLength={MAX_CUERPO} value={cuerpo} onChange={(event) => setCuerpo(event.target.value)} />
+        <span className="plat-field__hint">{cuerpo.length} de {MAX_CUERPO} caracteres</span>
+      </div>
+      <div className="plat-card__actions">
         <button type="submit" className="btn-primary" disabled={enviando}>Enviar mensaje</button>
       </div>
     </form>

@@ -77,11 +77,11 @@ describe('Plataforma', () => {
     mocks.user.role = 'OperadorSaaS'; mocks.listar.mockResolvedValue([])
     render(<Plataforma />)
     await screen.findByText('No hay empresas en este estado.')
-    expect(screen.queryByRole('tab', { name: 'Grupos' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Grupos' })).toBeNull()
     cleanup()
     mocks.user.role = 'AdminPlataforma'
     render(<Plataforma />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Grupos' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Grupos' }))
     expect(await screen.findByText('Panel de grupos')).toBeTruthy()
   })
 
@@ -90,6 +90,16 @@ describe('Plataforma', () => {
     render(<Plataforma />)
     expect(await screen.findByRole('button', { name: 'Gestionar Acme' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Activar Acme' })).toBeNull()
+  })
+
+  it('volverAEmpresasDesdeElMenu cierra el detalle', async () => {
+    mocks.user.role = 'AdminPlataforma'; mocks.listar.mockResolvedValue([empresa])
+    render(<Plataforma />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Gestionar Acme' }))
+    expect(await screen.findByText('Detalle Acme')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Empresas' }))
+    expect(await screen.findByRole('button', { name: 'Gestionar Acme' })).toBeTruthy()
+    expect(screen.queryByText('Detalle Acme')).toBeNull()
   })
 
   it('gestionar abre el detalle de la empresa', async () => {
@@ -104,7 +114,7 @@ describe('Plataforma', () => {
     render(<Plataforma />)
     fireEvent.click(await screen.findByRole('button', { name: 'Activar Acme' }))
     await waitFor(() => expect(mocks.activar).toHaveBeenCalledWith('t-9'))
-    expect(await screen.findByText('ACTIVO')).toBeTruthy()
+    expect(await screen.findByText('Activa')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Activar Acme' })).toBeNull()
   })
 
@@ -125,7 +135,7 @@ describe('Plataforma', () => {
     fireEvent.change(screen.getByLabelText('Motivo del rechazo'), { target: { value: 'Datos falsos' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar rechazo' }))
     await waitFor(() => expect(mocks.rechazar).toHaveBeenCalledWith('t-9', 'Datos falsos'))
-    expect(await screen.findByText('RECHAZADO')).toBeTruthy()
+    expect(await screen.findByText('Rechazada')).toBeTruthy()
   })
 
   it('operador ve la lista sin acciones ni creación de usuarios', async () => {
@@ -134,13 +144,13 @@ describe('Plataforma', () => {
     expect(await screen.findByText('Acme')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Activar Acme' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Rechazar Acme' })).toBeNull()
-    expect(screen.queryByRole('tab', { name: 'Usuarios de plataforma' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Usuarios de plataforma' })).toBeNull()
   })
 
   it('admin crea un OperadorSaaS', async () => {
     mocks.user.role = 'AdminPlataforma'; mocks.listar.mockResolvedValue([]); mocks.crear.mockResolvedValue({ email: 'soporte@rrhh.cl' })
     render(<Plataforma />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Usuarios de plataforma' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuarios de plataforma' }))
     fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'soporte@rrhh.cl' } })
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Soporte' } })
     fireEvent.click(screen.getByRole('button', { name: 'Crear usuario' }))
@@ -152,7 +162,7 @@ describe('Plataforma', () => {
     mocks.listar.mockImplementation(async (estado?: string) => (estado === 'ACTIVO' ? [{ ...empresa, id: 't-1', nombreEmpresa: 'Beta', estado: 'ACTIVO' }] : []))
     mocks.crear.mockResolvedValue({ email: 'jefe@beta.cl' })
     render(<Plataforma />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Usuarios de plataforma' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuarios de plataforma' }))
     fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'jefe@beta.cl' } })
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Jefa' } })
     fireEvent.change(screen.getByLabelText('Rol'), { target: { value: 'SuperAdmin' } })

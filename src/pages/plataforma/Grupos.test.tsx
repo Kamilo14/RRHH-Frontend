@@ -26,13 +26,14 @@ vi.mock('../../services/identityService', () => ({
 import Grupos from './Grupos'
 
 const grupo = { id: 'g-1', nombre: 'Sur', tenantIds: [] as string[], operadorIds: [] as string[] }
-const acme = { id: 't-9', nombreEmpresa: 'Acme', grupo: null }
-const beta = { id: 't-8', nombreEmpresa: 'Beta', grupo: 'Norte' }
+const acme = { id: 't-9', nombreEmpresa: 'Acme', grupo: null, estado: 'ACTIVO' }
+const beta = { id: 't-8', nombreEmpresa: 'Beta', grupo: 'Norte', estado: 'ACTIVO' }
+const delta = { id: 't-7', nombreEmpresa: 'Delta', grupo: null, estado: 'PENDIENTE_ACTIVACION' }
 const operador = { id: 'op-1', email: 'op@rrhh.cl', nombre: 'Op', estado: 'ACTIVO' }
 
 function datos(grupos = [grupo]) {
   mocks.listarGrupos.mockResolvedValue(grupos)
-  mocks.listarEmpresas.mockResolvedValue([acme, beta])
+  mocks.listarEmpresas.mockResolvedValue([acme, beta, delta])
   mocks.listarOperadores.mockResolvedValue([operador])
 }
 
@@ -96,7 +97,7 @@ describe('Grupos', () => {
     mocks.fijarEmpresas.mockRejectedValue(new Error('La empresa ya pertenece a otro grupo'))
     render(<Grupos />)
     const tarjeta = await screen.findByRole('region', { name: 'Grupo Sur' })
-    fireEvent.click(within(tarjeta).getByLabelText('Beta'))
+    fireEvent.click(within(tarjeta).getByLabelText(/^Beta/))
     fireEvent.click(within(tarjeta).getByRole('button', { name: 'Guardar empresas' }))
     expect(await within(tarjeta).findByText('La empresa ya pertenece a otro grupo')).toBeTruthy()
   })
@@ -113,5 +114,23 @@ describe('Grupos', () => {
     await waitFor(() => expect(mocks.borrarGrupo).toHaveBeenCalledWith('g-1'))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Sur' })).toBeNull())
     expect(confirmar).toHaveBeenCalledTimes(2)
+  })
+
+  it('soloOfreceEmpresasActivas', async () => {
+    datos()
+    render(<Grupos />)
+    const tarjeta = await screen.findByRole('region', { name: 'Grupo Sur' })
+    expect(within(tarjeta).getByLabelText('Acme')).toBeTruthy()
+    expect(within(tarjeta).queryByLabelText(/^Delta/)).toBeNull()
+  })
+
+  it('cargaParcialSiFallanLosOperadores', async () => {
+    mocks.listarGrupos.mockResolvedValue([grupo])
+    mocks.listarEmpresas.mockResolvedValue([acme])
+    mocks.listarOperadores.mockRejectedValue(new Error('Recurso no encontrado'))
+    render(<Grupos />)
+    expect(await screen.findByText('No se pudieron cargar los operadores: Recurso no encontrado')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ver grupo Sur' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Grupo Sur' })).toBeTruthy()
   })
 })
