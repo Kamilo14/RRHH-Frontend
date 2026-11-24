@@ -17,6 +17,7 @@ vi.mock('react-oidc-context', () => ({ useAuth: () => ({ removeUser: mocks.remov
 vi.mock('../../config/oidcConfig', () => ({ signOutRedirect: mocks.signOutRedirect }))
 vi.mock('../../services/tokenStorage', () => ({ clearAuth: mocks.clearAuth }))
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mocks.user, logout: mocks.logout }) }))
+vi.mock('./Grupos', () => ({ default: () => <div>Panel de grupos</div> }))
 vi.mock('./DetalleEmpresa', () => ({
   default: ({ empresa }: { empresa: { nombreEmpresa: string } }) => <div>Detalle {empresa.nombreEmpresa}</div>,
 }))
@@ -70,6 +71,18 @@ describe('Plataforma', () => {
     render(<Plataforma />)
     expect(await screen.findByText('No hay empresas en este estado.')).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('soloElAdminVeGrupos', async () => {
+    mocks.user.role = 'OperadorSaaS'; mocks.listar.mockResolvedValue([])
+    render(<Plataforma />)
+    await screen.findByText('No hay empresas en este estado.')
+    expect(screen.queryByRole('tab', { name: 'Grupos' })).toBeNull()
+    cleanup()
+    mocks.user.role = 'AdminPlataforma'
+    render(<Plataforma />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Grupos' }))
+    expect(await screen.findByText('Panel de grupos')).toBeTruthy()
   })
 
   it('operadorVeGestionarPeroNoActivar', async () => {

@@ -13,9 +13,10 @@ import {
 } from '../../services/identityService'
 import { normalizeRole } from '../../security/accessControl'
 import DetalleEmpresa from './DetalleEmpresa'
+import Grupos from './Grupos'
 import '../../styles/trabajadores.css'
 
-type Pestana = 'empresas' | 'usuarios'
+type Pestana = 'empresas' | 'usuarios' | 'grupos'
 
 const FILTROS_ESTADO: { valor: string; etiqueta: string }[] = [
   { valor: 'PENDIENTE_ACTIVACION', etiqueta: 'Pendientes de activación' },
@@ -68,6 +69,17 @@ function Plataforma() {
           <button
             type="button"
             role="tab"
+            aria-selected={pestana === 'grupos'}
+            className={`trab-filter-tab${pestana === 'grupos' ? ' trab-filter-tab--active' : ''}`}
+            onClick={() => setPestana('grupos')}
+          >
+            Grupos
+          </button>
+        )}
+        {esAdmin && (
+          <button
+            type="button"
+            role="tab"
             aria-selected={pestana === 'usuarios'}
             className={`trab-filter-tab${pestana === 'usuarios' ? ' trab-filter-tab--active' : ''}`}
             onClick={() => setPestana('usuarios')}
@@ -76,7 +88,9 @@ function Plataforma() {
           </button>
         )}
       </div>
-      {pestana === 'usuarios' && esAdmin ? <UsuariosPlataforma /> : <Empresas esAdmin={esAdmin} />}
+      {pestana === 'usuarios' && esAdmin ? <UsuariosPlataforma />
+        : pestana === 'grupos' && esAdmin ? <Grupos />
+          : <Empresas esAdmin={esAdmin} />}
     </main>
   )
 }
