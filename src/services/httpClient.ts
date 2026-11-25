@@ -21,6 +21,14 @@ export interface ApiResponse<T> {
   errores: { campo: string; detalle: string }[]
 }
 
+export interface ErrorDeCampo {
+  campo: string
+  detalle: string
+}
+
+/** Error que rechaza el interceptor: `message` es el `mensaje` del backend y `errores` sus errores por campo. */
+export type ApiError = Error & { errores: ErrorDeCampo[] }
+
 type AuthRequestConfig = InternalAxiosRequestConfig & { skipAuth?: boolean }
 
 // ─── Cliente Axios ─────────────────────────────────────────────────────────────
@@ -48,6 +56,19 @@ apiClient.interceptors.request.use(async (config: AuthRequestConfig) => {
   return config
 })
 
+/** Cuerpo de error como objeto; una descarga con `responseType: 'blob'` lo trae como Blob con JSON. */
+async function leerCuerpoDeError(data: unknown): Promise<Partial<ApiResponse<null>> | null> {
+  if (!data) return null
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      return JSON.parse(await data.text()) as Partial<ApiResponse<null>>
+    } catch {
+      return null
+    }
+  }
+  return typeof data === 'object' ? (data as Partial<ApiResponse<null>>) : null
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -58,18 +79,20 @@ apiClient.interceptors.response.use(
     }
 
     if (!error.response) {
-      return Promise.reject(new Error(
+      return Promise.reject(Object.assign(new Error(
         'No se pudo conectar con el servicio solicitado. Verifica que el API Gateway y los servicios conectados a la EC2 estén disponibles.',
-      ))
+      ), { errores: [] }) as ApiError)
     }
 
     let mensaje = `Error ${error.response?.status || 'desconocido'}`
-    if (error.response?.data) {
-      const errorData = error.response.data as ApiResponse<null>
+    let errores: ErrorDeCampo[] = []
+    const errorData = await leerCuerpoDeError(error.response.data)
+    if (errorData) {
       mensaje = errorData.mensaje || mensaje
+      if (Array.isArray(errorData.errores)) errores = errorData.errores
     }
 
-    return Promise.reject(new Error(mensaje))
+    return Promise.reject(Object.assign(new Error(mensaje), { errores }) as ApiError)
   }
 )
 
@@ -98,6 +121,18 @@ export async function apiRequest<T>(
 export async function apiPost<T>(url: string, data: any): Promise<T> {
   const response = await apiClient.post(url, data)
   return response.data as T
+}
+
+/** POST cuyo cuerpo puede faltar (acciones sin datos, como aprobar). */
+export async function apiPostEmpty<T>(url: string, data?: unknown): Promise<T> {
+  const response = await apiClient.post(url, data)
+  return response.data as T
+}
+
+/** GET de un archivo binario (por ejemplo, un PDF). */
+export async function apiGetBlob(url: string): Promise<Blob> {
+  const response = await apiClient.get(url, { responseType: 'blob' })
+  return response.data as Blob
 }
 
 export async function apiPatch<T>(url: string, data: any): Promise<T> {
