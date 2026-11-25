@@ -1,0 +1,268 @@
+/* Consola de plataforma (ADR-020): misma base visual que el panel administrativo (admin.css, trabajadores.css). */
+
+.plat-field {
+  display: grid;
+  gap: 6px;
+}
+
+.plat-field label,
+.plat-field__label {
+  color: #3c5568;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.plat-field input,
+.plat-field select,
+.plat-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d9e8f0;
+  border-radius: 8px;
+  color: #12324c;
+  background: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.plat-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.plat-field input:focus,
+.plat-field select:focus,
+.plat-field textarea:focus {
+  outline: none;
+  border-color: #1687b8;
+  box-shadow: 0 0 0 3px rgba(22, 135, 184, 0.1);
+}
+
+.plat-field__hint {
+  color: #7890a0;
+  font-size: 0.75rem;
+}
+
+.plat-inline {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.plat-inline .plat-field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.plat-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plat-filter label {
+  color: #3c5568;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.plat-filter select {
+  padding: 9px 12px;
+  border: 1px solid #d9e8f0;
+  border-radius: 8px;
+  color: #12324c;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.plat-table-select {
+  padding: 6px 8px;
+  border: 1px solid #d9e8f0;
+  border-radius: 7px;
+  color: #12324c;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.plat-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.plat-detail-header h2 {
+  margin: 0 0 6px;
+  color: #12324c;
+  font-size: 1.3rem;
+}
+
+.plat-detail-header__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: #7890a0;
+  font-size: 0.82rem;
+}
+
+.plat-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.plat-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px;
+  border: 1px solid #e2edf3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.plat-card h3 {
+  margin: 0;
+  color: #12324c;
+  font-size: 1.02rem;
+}
+
+.plat-card p {
+  margin: 0;
+  color: #7890a0;
+  font-size: 0.84rem;
+}
+
+.plat-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.plat-notice {
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #1a5d7f;
+  background: #e8f5fb;
+  font-size: 0.85rem;
+}
+
+.plat-notice--warning {
+  color: #7a4b00;
+  background: #fff4dc;
+}
+
+.plat-notice--error {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.trab-badge--neutro {
+  color: #3c5568;
+  background: #eef4f8;
+}
+
+.trab-badge--pendiente {
+  color: #7a4b00;
+  background: #fff4dc;
+}
+
+.plat-groups {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .plat-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plat-group-list {
+  display: grid;
+  gap: 8px;
+}
+
+.plat-group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e2edf3;
+  border-radius: 10px;
+  color: #12324c;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.plat-group-item:hover {
+  background: #f3f9fc;
+}
+
+.plat-group-item--active {
+  border-color: #147eaf;
+  background: #eef9fd;
+}
+
+.plat-group-item span {
+  color: #7890a0;
+  font-size: 0.75rem;
+}
+
+.plat-checklist {
+  display: grid;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #e2edf3;
+  border-radius: 10px;
+}
+
+.plat-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: #12324c;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.plat-check:hover {
+  background: #f3f9fc;
+}
+
+.plat-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.plat-check small {
+  margin-left: auto;
+  color: #7890a0;
+  font-size: 0.75rem;
+}
+
+.plat-empty {
+  padding: 18px;
+  color: #7890a0;
+  font-size: 0.85rem;
+  text-align: center;
+}

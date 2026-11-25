@@ -4,16 +4,32 @@ const mocks = vi.hoisted(() => ({
   apiRequest: vi.fn(),
   apiPost: vi.fn(),
   apiPatch: vi.fn(),
+  apiPut: vi.fn(),
+  apiDelete: vi.fn(),
 }))
 
 vi.mock('./httpClient', () => ({
   apiRequest: mocks.apiRequest,
   apiPost: mocks.apiPost,
   apiPatch: mocks.apiPatch,
+  apiPut: mocks.apiPut,
+  apiDelete: mocks.apiDelete,
 }))
 
 import {
   activarEmpresa,
+  borrarGrupo,
+  cambiarRolIntegrante,
+  crearGrupo,
+  enviarMensajeEmpresa,
+  fijarEmpresasGrupo,
+  fijarOperadoresGrupo,
+  listarGrupos,
+  listarIntegrantes,
+  listarOperadores,
+  reactivarEmpresa,
+  renombrarGrupo,
+  suspenderEmpresa,
   crearUsuarioPlataforma,
   getMe,
   listarEmpresasPlataforma,
@@ -29,7 +45,7 @@ const tenantApi = {
 }
 const tenant = {
   id: 't-9', nombreEmpresa: 'Acme', slug: 'acme', activo: false, estado: 'PENDIENTE_ACTIVACION',
-  rutEmpresa: '76086428-5', razonSocial: 'Acme SpA', registradoPorEmail: 'a@gmail.com', cognitoError: null,
+  rutEmpresa: '76086428-5', razonSocial: 'Acme SpA', registradoPorEmail: 'a@gmail.com', cognitoError: null, grupo: null,
 }
 
 describe('identityService', () => {
@@ -106,5 +122,60 @@ describe('identityService', () => {
     expect(u.rol).toBe('OperadorSaaS')
     await crearUsuarioPlataforma({ email: 'x@acme.cl', nombre: 'X', rol: 'SuperAdmin', tenantId: 't-9' })
     expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/usuarios$/), { email: 'x@acme.cl', nombre: 'X', rol: 'SuperAdmin', tenant_id: 't-9' })
+  })
+
+  it('normalizaTenantSinGrupo', async () => {
+    mocks.apiRequest.mockResolvedValue({ datos: [tenantApi, { ...tenantApi, id: 't-8', grupo: 'Sur' }] })
+    const [sinGrupo, conGrupo] = await listarEmpresasPlataforma()
+    expect(sinGrupo.grupo).toBeNull()
+    expect(conGrupo.grupo).toBe('Sur')
+  })
+
+  it('gruposUsanSusRutas', async () => {
+    const grupoApi = { id: 'g-1', nombre: 'Sur', tenant_ids: ['t-1'], operador_ids: ['op-1'] }
+    const grupo = { id: 'g-1', nombre: 'Sur', tenantIds: ['t-1'], operadorIds: ['op-1'] }
+    mocks.apiRequest.mockResolvedValue({ datos: [grupoApi] })
+    expect(await listarGrupos()).toEqual([grupo])
+    expect(mocks.apiRequest).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos$/))
+    mocks.apiPost.mockResolvedValue({ datos: grupoApi })
+    expect(await crearGrupo('Sur')).toEqual(grupo)
+    expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos$/), { nombre: 'Sur' })
+    mocks.apiPatch.mockResolvedValue({ datos: { ...grupoApi, nombre: 'Norte' } })
+    expect((await renombrarGrupo('g-1', 'Norte')).nombre).toBe('Norte')
+    expect(mocks.apiPatch).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos\/g-1$/), { nombre: 'Norte' })
+    mocks.apiPut.mockResolvedValue({ datos: grupoApi })
+    await fijarEmpresasGrupo('g-1', ['t-1'])
+    expect(mocks.apiPut).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos\/g-1\/empresas$/), { ids: ['t-1'] })
+    await fijarOperadoresGrupo('g-1', ['op-1'])
+    expect(mocks.apiPut).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos\/g-1\/operadores$/), { ids: ['op-1'] })
+    mocks.apiDelete.mockResolvedValue(undefined)
+    await borrarGrupo('g-1')
+    expect(mocks.apiDelete).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/grupos\/g-1$/))
+  })
+
+  it('accionesDeEmpresaUsanSusRutas', async () => {
+    const usuarioApi = { id: 'u-1', tenant_id: 't-1', email: 't@x.cl', nombre: 'T', rol: 'Jefatura', estado: 'ACTIVO' }
+    mocks.apiRequest.mockResolvedValue({ datos: [usuarioApi] })
+    expect((await listarIntegrantes('t-1'))[0].email).toBe('t@x.cl')
+    expect(mocks.apiRequest).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/usuarios$/))
+    await listarOperadores()
+    expect(mocks.apiRequest).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/operadores$/))
+    mocks.apiPatch.mockResolvedValue({ datos: usuarioApi })
+    expect((await cambiarRolIntegrante('t-1', 'u-1', 'Jefatura')).rol).toBe('Jefatura')
+    expect(mocks.apiPatch).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/usuarios\/u-1\/rol$/), { rol: 'Jefatura' })
+    mocks.apiPost.mockResolvedValue({ datos: { ...tenantApi, estado: 'SUSPENDIDO' } })
+    expect((await suspenderEmpresa('t-1', 'Impago')).estado).toBe('SUSPENDIDO')
+    expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/suspender$/), { motivo: 'Impago' })
+    mocks.apiPost.mockResolvedValue({ datos: { ...tenantApi, estado: 'ACTIVO' } })
+    await reactivarEmpresa('t-1')
+    expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/reactivar$/), {})
+    mocks.apiPost.mockResolvedValue({ datos: { destinatarios: 2 } })
+    expect(await enviarMensajeEmpresa('t-1', 'A', 'B')).toBe(2)
+    expect(mocks.apiPost).toHaveBeenLastCalledWith(expect.stringMatching(/\/plataforma\/tenants\/t-1\/mensajes$/), { asunto: 'A', cuerpo: 'B' })
+  })
+
+  it('cambiarRolIntegrante conserva cognito_error', async () => {
+    mocks.apiPatch.mockResolvedValue({ datos: { id: 'u-1', tenant_id: 't-1', email: 't@x.cl', nombre: 'T', rol: 'Jefatura', estado: 'ACTIVO', cognito_error: 'AccessDeniedException' } })
+    expect((await cambiarRolIntegrante('t-1', 'u-1', 'Jefatura')).cognitoError).toBe('AccessDeniedException')
   })
 })

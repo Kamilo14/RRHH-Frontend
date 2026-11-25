@@ -17,9 +17,11 @@
  *  POST /api/v1/usuarios/invitar              → invitar trabajador
  *  POST /api/v1/usuarios/:id/asignar          → asignar usuario a tenant
  *  PATCH /api/v1/usuarios/:id/estado          → cambiar estado del usuario
+ *  Consola de plataforma (ADR-020): grupos, operadores, integrantes, rol, suspender/reactivar y mensajes
+ *  bajo /api/v1/plataforma/...
  */
 
-import { apiRequest, apiPost, apiPatch, type ApiResponse } from './httpClient'
+import { apiRequest, apiPost, apiPatch, apiPut, apiDelete, type ApiResponse } from './httpClient'
 import { API_BASE } from './apiConfig'
 
 const BASE = API_BASE
@@ -68,6 +70,8 @@ export interface UsuarioResponse {
   trabajadorId: string | null
   cognitoSub: string | null
   contrasenaTemporal: string | null
+  /** Error de Cognito al sincronizar la cuenta (rol, claims), o null si se sincronizó. */
+  cognitoError?: string | null
 }
 
 export interface TenantResolverResponse {
@@ -109,6 +113,8 @@ export interface TenantResumen {
   razonSocial: string | null
   registradoPorEmail: string | null
   cognitoError: string | null
+  /** Nombre del grupo de empresas (ADR-020), o null si no está en ninguno. */
+  grupo: string | null
 }
 
 interface TenantResumenApi {
@@ -121,6 +127,22 @@ interface TenantResumenApi {
   razon_social?: string | null
   registrado_por_email?: string | null
   cognito_error?: string | null
+  grupo?: string | null
+}
+
+/** Grupo de empresas que el AdminPlataforma asigna a OperadoresSaaS (ADR-020, S2). */
+export interface Grupo {
+  id: string
+  nombre: string
+  tenantIds: string[]
+  operadorIds: string[]
+}
+
+interface GrupoApi {
+  id: string
+  nombre: string
+  tenant_ids?: string[] | null
+  operador_ids?: string[] | null
 }
 
 export interface CrearUsuarioPlataformaData {
@@ -314,6 +336,81 @@ export async function cambiarEstadoUsuario(id: string, data: CambiarEstadoReques
   return res.datos
 }
 
+// ─── Consola de plataforma (ADR-020) ─────────────────────────────────────────
+
+const PLATAFORMA = `${BASE}/plataforma`
+const tenantPath = (tenantId: string) => `${PLATAFORMA}/tenants/${encodeURIComponent(tenantId)}`
+const grupoPath = (id: string) => `${PLATAFORMA}/grupos/${encodeURIComponent(id)}`
+
+/** Grupos de empresas (solo AdminPlataforma). */
+export async function listarGrupos(): Promise<Grupo[]> {
+  const res = await apiRequest<ApiResponse<GrupoApi[]>>(`${PLATAFORMA}/grupos`)
+  return res.datos.map(normalizarGrupo)
+}
+
+export async function crearGrupo(nombre: string): Promise<Grupo> {
+  const res = await apiPost<ApiResponse<GrupoApi>>(`${PLATAFORMA}/grupos`, { nombre })
+  return normalizarGrupo(res.datos)
+}
+
+export async function renombrarGrupo(id: string, nombre: string): Promise<Grupo> {
+  const res = await apiPatch<ApiResponse<GrupoApi>>(grupoPath(id), { nombre })
+  return normalizarGrupo(res.datos)
+}
+
+export async function borrarGrupo(id: string): Promise<void> {
+  await apiDelete<unknown>(grupoPath(id))
+}
+
+/** Reemplaza las empresas del grupo; una lista vacía lo deja sin empresas. */
+export async function fijarEmpresasGrupo(id: string, tenantIds: string[]): Promise<Grupo> {
+  const res = await apiPut<ApiResponse<GrupoApi>>(`${grupoPath(id)}/empresas`, { ids: tenantIds })
+  return normalizarGrupo(res.datos)
+}
+
+/** Reemplaza los operadores del grupo; una lista vacía lo deja sin operadores. */
+export async function fijarOperadoresGrupo(id: string, usuarioIds: string[]): Promise<Grupo> {
+  const res = await apiPut<ApiResponse<GrupoApi>>(`${grupoPath(id)}/operadores`, { ids: usuarioIds })
+  return normalizarGrupo(res.datos)
+}
+
+/** Cuentas OperadorSaaS, para asignarlas a un grupo (solo AdminPlataforma). */
+export async function listarOperadores(): Promise<UsuarioResponse[]> {
+  const res = await apiRequest<ApiResponse<UsuarioResponseApi[]>>(`${PLATAFORMA}/operadores`)
+  return res.datos.map(normalizarUsuario)
+}
+
+/** Integrantes de una empresa en el alcance del actor (S4). */
+export async function listarIntegrantes(tenantId: string): Promise<UsuarioResponse[]> {
+  const res = await apiRequest<ApiResponse<UsuarioResponseApi[]>>(`${tenantPath(tenantId)}/usuarios`)
+  return res.datos.map(normalizarUsuario)
+}
+
+/** Cambia el rol de un integrante a Admin de RRHH, Jefatura o Trabajador (S5). */
+export async function cambiarRolIntegrante(tenantId: string, usuarioId: string, rol: string): Promise<UsuarioResponse> {
+  const res = await apiPatch<ApiResponse<UsuarioResponseApi>>(
+    `${tenantPath(tenantId)}/usuarios/${encodeURIComponent(usuarioId)}/rol`, { rol })
+  return normalizarUsuario(res.datos)
+}
+
+/** Suspende una empresa ACTIVA con un motivo (S6). */
+export async function suspenderEmpresa(tenantId: string, motivo: string): Promise<TenantResumen> {
+  const res = await apiPost<ApiResponse<TenantResumenApi>>(`${tenantPath(tenantId)}/suspender`, { motivo })
+  return normalizarTenant(res.datos)
+}
+
+/** Reactiva una empresa SUSPENDIDA (S6). */
+export async function reactivarEmpresa(tenantId: string): Promise<TenantResumen> {
+  const res = await apiPost<ApiResponse<TenantResumenApi>>(`${tenantPath(tenantId)}/reactivar`, {})
+  return normalizarTenant(res.datos)
+}
+
+/** Envía un mensaje al Admin de RRHH de la empresa (S7); devuelve cuántos destinatarios tuvo. */
+export async function enviarMensajeEmpresa(tenantId: string, asunto: string, cuerpo: string): Promise<number> {
+  const res = await apiPost<ApiResponse<{ destinatarios: number }>>(`${tenantPath(tenantId)}/mensajes`, { asunto, cuerpo })
+  return res.datos.destinatarios
+}
+
 interface UsuarioResponseApi {
   id: string
   tenant_id?: string
@@ -328,6 +425,7 @@ interface UsuarioResponseApi {
   cognitoSub?: string | null
   contrasena_temporal?: string | null
   contrasenaTemporal?: string | null
+  cognito_error?: string | null
 }
 
 function normalizarTenant(tenant: TenantResumenApi): TenantResumen {
@@ -341,6 +439,16 @@ function normalizarTenant(tenant: TenantResumenApi): TenantResumen {
     razonSocial: tenant.razon_social ?? null,
     registradoPorEmail: tenant.registrado_por_email ?? null,
     cognitoError: tenant.cognito_error ?? null,
+    grupo: tenant.grupo ?? null,
+  }
+}
+
+function normalizarGrupo(grupo: GrupoApi): Grupo {
+  return {
+    id: grupo.id,
+    nombre: grupo.nombre,
+    tenantIds: grupo.tenant_ids ?? [],
+    operadorIds: grupo.operador_ids ?? [],
   }
 }
 
@@ -355,5 +463,6 @@ function normalizarUsuario(usuario: UsuarioResponseApi): UsuarioResponse {
     trabajadorId: usuario.trabajadorId ?? usuario.trabajador_id ?? null,
     cognitoSub: usuario.cognitoSub ?? usuario.cognito_sub ?? null,
     contrasenaTemporal: usuario.contrasenaTemporal ?? usuario.contrasena_temporal ?? null,
+    cognitoError: usuario.cognito_error ?? null,
   }
 }
